@@ -1,0 +1,17 @@
+{
+  "name": "campus-p2p-mvp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "b4a": "^1.8.1",
+    "hyperswarm": "^4.17.0",
+    "tweetnacl": "^1.0.3"
+  }
+}
