@@ -6,5 +6,13 @@
     "size": 25743,
     "timestamp": 1784574272313,
     "signature": "4c97c245bc6b33a8beec54424c2ca85dbf24911990beb3f8bb91ee5e04e9793c0900cc4937531c39a489064ff70b155e938564e8decb05ec7580ce67af18f106"
+  },
+  {
+    "courseId": "COMSCI214",
+    "filename": "smoke-test-file.txt",
+    "hash": "9476176c90f5ff4cb46ee84b378b5c1a6d050ca5391bb021144aaa8f264c8276",
+    "size": 22,
+    "timestamp": 1785018289320,
+    "signature": "525963347ff4ba95857f866dbb5bbdffb941d691c985fb0b26e2778636acc11b4181018cf5a22b232b5b45438f6b821060f421db9b7ee21bc9b982a7699ab30e"
   }
 ]

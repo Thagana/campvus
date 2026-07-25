@@ -33,7 +33,7 @@ Run it again with the same file and you'll see the dedup check kick in.
 
 ## What's already proven (works today, tested)
 
-- Manifest signing and verification (`src/crypto-utils.js`)
+- Manifest signing and verification (`src/engine/crypto-utils.js`)
 - Tamper detection — flip one character in a manifest and verification
   fails
 - Content-hash addressing and dedup on re-ingest

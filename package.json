@@ -2,9 +2,9 @@
   "name": "campus-p2p-mvp",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/engine/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/*.test.js"
   },
   "keywords": [],
   "author": "",
@@ -13,5 +13,11 @@
     "b4a": "^1.8.1",
     "hyperswarm": "^4.17.0",
     "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/b4a": "^1.6.5",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
   }
 }
