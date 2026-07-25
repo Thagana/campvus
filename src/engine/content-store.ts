@@ -3,29 +3,27 @@
 // concept: watcher.js copying an ingested file into content-store/<hash>,
 // and peer-node.js reading/writing swarm-received bytes by hash filename.
 
-const fs = require('fs')
-const path = require('path')
+import fs from 'fs'
+import path from 'path'
 
-function ensureDir (dir) {
+export function ensureDir (dir: string): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 }
 
-function hasContent (contentDir, hash) {
+export function hasContent (contentDir: string, hash: string): boolean {
   return fs.existsSync(path.join(contentDir, hash))
 }
 
-function readContent (contentDir, hash) {
+export function readContent (contentDir: string, hash: string): Buffer {
   return fs.readFileSync(path.join(contentDir, hash))
 }
 
-function writeContent (contentDir, hash, buf) {
+export function writeContent (contentDir: string, hash: string, buf: Uint8Array): void {
   ensureDir(contentDir)
   fs.writeFileSync(path.join(contentDir, hash), buf)
 }
 
-function listContentHashes (contentDir) {
+export function listContentHashes (contentDir: string): Set<string> {
   ensureDir(contentDir)
   return new Set(fs.readdirSync(contentDir))
 }
-
-module.exports = { ensureDir, hasContent, readContent, writeContent, listContentHashes }

@@ -1,14 +1,14 @@
-const test = require('node:test')
-const assert = require('node:assert/strict')
-const fs = require('fs')
-const path = require('path')
-const os = require('os')
-const nacl = require('tweetnacl')
-const { resolvePaths } = require('../src/config/paths')
-const { ingestBuffer } = require('../src/engine/ingest')
-const { readContent } = require('../src/engine/content-store')
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+import nacl from 'tweetnacl'
+import { resolvePaths, Paths } from '../src/config/paths'
+import { ingestBuffer } from '../src/engine/ingest'
+import { readContent } from '../src/engine/content-store'
 
-function tmpPaths () {
+function tmpPaths (): Paths {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'campvus-test-'))
   return resolvePaths({ rootDir })
 }

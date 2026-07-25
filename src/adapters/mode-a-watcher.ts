@@ -4,18 +4,19 @@
 // simulates "a lecturer uploaded a file" as a manual CLI call, so the rest
 // of the pipeline (hash, sign, publish, distribute) can be built and tested
 // before the LMS integration exists. Everything past argv parsing here is a
-// call into the shared engine (../engine/ingest.js) — a future Mode B
+// call into the shared engine (../engine/ingest.ts) — a future Mode B
 // direct-upload adapter would live alongside this file (e.g.
-// mode-b-upload.js) and call the same ingestBuffer/ingestFile functions.
+// mode-b-upload.ts) and call the same ingestBuffer/ingestFile functions.
 //
-// Usage: node src/watcher.js <courseId> <path-to-file>
+// Usage: npx tsx src/watcher.ts <courseId> <path-to-file>
 
-const { ingestFile } = require('../engine/ingest')
+import { ingestFile } from '../engine/ingest'
+import { SignedManifest } from '../engine/types'
 
-function run (argv) {
+export function run (argv: string[]): SignedManifest {
   const [courseId, filePath] = argv
   if (!courseId || !filePath) {
-    console.log('Usage: node src/watcher.js <courseId> <path-to-file>')
+    console.log('Usage: npx tsx src/watcher.ts <courseId> <path-to-file>')
     process.exit(1)
   }
 
@@ -33,5 +34,3 @@ function run (argv) {
   console.log(`  signed manifest appended to registry.json`)
   return manifest
 }
-
-module.exports = { run }

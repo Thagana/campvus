@@ -1,4 +1,4 @@
-// I/O shell around the shared swarm protocol (./swarm-protocol.js):
+// I/O shell around the shared swarm protocol (./swarm-protocol.ts):
 // Hyperswarm wiring, manifest-store/content-store reads+writes, and the
 // console output the spike prints. This is the piece that validates the
 // single highest-risk assumption in the architecture: that two devices can
@@ -6,28 +6,40 @@
 // Hyperswarm without any central server in the loop beyond the DHT itself.
 //
 // Usage:
-//   node src/peer-node.js <courseId> --content-dir=./content-store --pubkey=<hex>
-//   node src/peer-node.js <courseId> --content-dir=./incoming --pubkey=<hex>
+//   npx tsx src/peer-node.ts <courseId> --content-dir=./content-store --pubkey=<hex>
+//   npx tsx src/peer-node.ts <courseId> --content-dir=./incoming --pubkey=<hex>
 
-const path = require('path')
-const Hyperswarm = require('hyperswarm')
-const b4a = require('b4a')
-const { loadRegistry } = require('./manifest-store')
-const { listContentHashes, readContent, writeContent } = require('./content-store')
-const { loadPublicKeyHex } = require('./identity')
-const { verifyManifest } = require('./crypto-utils')
-const { topicForCourse } = require('./topics')
-const {
+import path from 'path'
+import { Duplex } from 'stream'
+import Hyperswarm from 'hyperswarm'
+import b4a from 'b4a'
+import { loadRegistry } from './manifest-store'
+import { listContentHashes, readContent, writeContent } from './content-store'
+import { loadPublicKeyHex } from './identity'
+import { verifyManifest } from './crypto-utils'
+import { topicForCourse } from './topics'
+import {
   planManifestsAnnouncement,
   applyManifestsMessage,
   planWantResponse,
-  applyDataMessage
-} = require('./swarm-protocol')
-const { resolvePaths } = require('../config/paths')
+  applyDataMessage,
+  ManifestsMessage,
+  WantMessage,
+  DataMessage
+} from './swarm-protocol'
+import { resolvePaths } from '../config/paths'
+import { SignedManifest } from './types'
 
-function parseArgs (argv) {
+type WireMessage = ManifestsMessage | WantMessage | DataMessage
+
+interface Opts {
+  courseId?: string
+  [key: string]: string | undefined
+}
+
+function parseArgs (argv: string[]): Opts {
   const [courseId, ...rest] = argv
-  const opts = { courseId }
+  const opts: Opts = { courseId }
   for (const arg of rest) {
     const m = arg.match(/^--([^=]+)=(.*)$/)
     if (m) opts[m[1]] = m[2]
@@ -35,12 +47,13 @@ function parseArgs (argv) {
   return opts
 }
 
-async function run (argv) {
+export async function run (argv: string[]): Promise<void> {
   const opts = parseArgs(argv)
   if (!opts.courseId) {
-    console.log('Usage: node src/peer-node.js <courseId> --content-dir=<path> [--pubkey=<hex>]')
+    console.log('Usage: npx tsx src/peer-node.ts <courseId> --content-dir=<path> [--pubkey=<hex>]')
     process.exit(1)
   }
+  const courseId = opts.courseId
 
   const paths = resolvePaths()
   // Deliberately CWD-relative, not repo-root-relative — matches the
@@ -48,16 +61,16 @@ async function run (argv) {
   const contentDir = path.resolve(opts['content-dir'] || './content-store')
   const publicKeyHex = opts.pubkey || loadPublicKeyHex(paths)
 
-  console.log(`Course:        ${opts.courseId}`)
+  console.log(`Course:        ${courseId}`)
   console.log(`Content dir:   ${contentDir}`)
   console.log(`Trusting key:  ${publicKeyHex.slice(0, 16)}...`)
 
   // Known manifests for this course, keyed by hash. Seeded from any local
   // registry.json (the "origin" machine will have one); other peers start
   // empty and learn manifests from whoever they connect to.
-  const knownManifests = new Map()
+  const knownManifests = new Map<string, SignedManifest>()
   for (const m of loadRegistry(paths)) {
-    if (m.courseId === opts.courseId && verifyManifest(m, publicKeyHex)) {
+    if (m.courseId === courseId && verifyManifest(m, publicKeyHex)) {
       knownManifests.set(m.hash, m)
     }
   }
@@ -67,39 +80,39 @@ async function run (argv) {
   console.log(`Starting with ${localHashes.size} content file(s) already on disk.`)
 
   const swarm = new Hyperswarm()
-  const topic = topicForCourse(opts.courseId)
+  const topic = topicForCourse(courseId)
 
-  swarm.on('connection', (conn, info) => {
+  swarm.on('connection', (conn: Duplex, info) => {
     const peerId = b4a.toString(info.publicKey, 'hex').slice(0, 8)
     console.log(`\n[peer ${peerId}] connected`)
 
     let buffer = ''
-    conn.on('data', (chunk) => {
+    conn.on('data', (chunk: Buffer) => {
       buffer += chunk.toString('utf8')
       let idx
       while ((idx = buffer.indexOf('\n')) !== -1) {
         const line = buffer.slice(0, idx)
         buffer = buffer.slice(idx + 1)
-        if (line.trim().length > 0) handleMessage(JSON.parse(line), conn, peerId)
+        if (line.trim().length > 0) handleMessage(JSON.parse(line) as WireMessage, conn, peerId)
       }
     })
 
-    conn.on('error', (err) => console.log(`[peer ${peerId}] connection error:`, err.message))
+    conn.on('error', (err: Error) => console.log(`[peer ${peerId}] connection error:`, err.message))
     conn.on('close', () => console.log(`[peer ${peerId}] disconnected`))
 
     // Announce every manifest we know of for this course.
     send(conn, planManifestsAnnouncement(knownManifests))
   })
 
-  function send (conn, obj) {
+  function send (conn: Duplex, obj: unknown): void {
     conn.write(JSON.stringify(obj) + '\n')
   }
 
-  function handleMessage (msg, conn, peerId) {
+  function handleMessage (msg: WireMessage, conn: Duplex, peerId: string): void {
     if (msg.type === 'manifests') {
       const { rejected, learned, toRequest } = applyManifestsMessage({
         msg,
-        courseId: opts.courseId,
+        courseId,
         publicKeyHex,
         knownManifests,
         localHashes
@@ -146,7 +159,5 @@ async function run (argv) {
 
   const discovery = swarm.join(topic, { server: true, client: true })
   await discovery.flushed()
-  console.log(`\nJoined swarm topic for course "${opts.courseId}". Waiting for peers...`)
+  console.log(`\nJoined swarm topic for course "${courseId}". Waiting for peers...`)
 }
-
-module.exports = { run, parseArgs }

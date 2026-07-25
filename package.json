@@ -2,9 +2,10 @@
   "name": "campus-p2p-mvp",
   "version": "1.0.0",
   "description": "",
-  "main": "src/engine/index.js",
+  "main": "src/engine/index.ts",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",

@@ -4,20 +4,23 @@
 // concurrently (e.g. a future Mode B upload path alongside Mode A's watcher)
 // — deferred deliberately, not an oversight.
 
-const fs = require('fs')
-const { resolvePaths } = require('../config/paths')
+import fs from 'fs'
+import { resolvePaths, Paths } from '../config/paths'
+import { SignedManifest } from './types'
 
-function loadRegistry (paths = resolvePaths()) {
+export function loadRegistry (paths: Paths = resolvePaths()): SignedManifest[] {
   if (!fs.existsSync(paths.registryFile)) return []
   return JSON.parse(fs.readFileSync(paths.registryFile, 'utf8'))
 }
 
-function saveRegistry (registry, paths = resolvePaths()) {
+export function saveRegistry (registry: SignedManifest[], paths: Paths = resolvePaths()): void {
   fs.writeFileSync(paths.registryFile, JSON.stringify(registry, null, 2))
 }
 
-function findByHashAndCourse (registry, hash, courseId) {
+export function findByHashAndCourse (
+  registry: SignedManifest[],
+  hash: string,
+  courseId: string
+): SignedManifest | undefined {
   return registry.find(m => m.hash === hash && m.courseId === courseId)
 }
-
-module.exports = { loadRegistry, saveRegistry, findByHashAndCourse }

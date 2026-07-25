@@ -6,14 +6,20 @@
 // is runnable end to end on a laptop. Swapping this module for a KMS-backed
 // signer later should not require changing anything else in the system.
 
-const fs = require('fs')
-const nacl = require('tweetnacl')
-const b4a = require('b4a')
-const { resolvePaths } = require('../config/paths')
+import fs from 'fs'
+import nacl from 'tweetnacl'
+import b4a from 'b4a'
+import { resolvePaths, Paths } from '../config/paths'
+import { Keypair } from './types'
 
-function generateAndSaveKeypair (paths = resolvePaths()) {
+interface KeypairRecord {
+  publicKey: string
+  secretKey: string
+}
+
+export function generateAndSaveKeypair (paths: Paths = resolvePaths()): KeypairRecord {
   const kp = nacl.sign.keyPair()
-  const record = {
+  const record: KeypairRecord = {
     publicKey: b4a.toString(kp.publicKey, 'hex'),
     secretKey: b4a.toString(kp.secretKey, 'hex')
   }
@@ -21,20 +27,18 @@ function generateAndSaveKeypair (paths = resolvePaths()) {
   return record
 }
 
-function loadKeypair (paths = resolvePaths()) {
+export function loadKeypair (paths: Paths = resolvePaths()): Keypair {
   if (!fs.existsSync(paths.keyFile)) {
-    throw new Error(`No institution keypair found at ${paths.keyFile}. Run: node src/identity.js generate`)
+    throw new Error(`No institution keypair found at ${paths.keyFile}. Run: node src/identity.ts generate`)
   }
-  const record = JSON.parse(fs.readFileSync(paths.keyFile, 'utf8'))
+  const record: KeypairRecord = JSON.parse(fs.readFileSync(paths.keyFile, 'utf8'))
   return {
     publicKey: b4a.from(record.publicKey, 'hex'),
     secretKey: b4a.from(record.secretKey, 'hex')
   }
 }
 
-function loadPublicKeyHex (paths = resolvePaths()) {
-  const record = JSON.parse(fs.readFileSync(paths.keyFile, 'utf8'))
+export function loadPublicKeyHex (paths: Paths = resolvePaths()): string {
+  const record: KeypairRecord = JSON.parse(fs.readFileSync(paths.keyFile, 'utf8'))
   return record.publicKey
 }
-
-module.exports = { generateAndSaveKeypair, loadKeypair, loadPublicKeyHex }

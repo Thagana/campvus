@@ -1,9 +1,10 @@
-const test = require('node:test')
-const assert = require('node:assert/strict')
-const nacl = require('tweetnacl')
-const { signManifest, verifyManifest, hashBuffer } = require('../src/engine/crypto-utils')
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import nacl from 'tweetnacl'
+import { signManifest, verifyManifest, hashBuffer } from '../src/engine/crypto-utils'
+import { ManifestFields } from '../src/engine/types'
 
-function manifestFields (overrides = {}) {
+function manifestFields (overrides: Partial<ManifestFields> = {}): ManifestFields {
   return {
     courseId: 'COMSCI214',
     filename: 'slides.pdf',
@@ -37,6 +38,6 @@ test('verification fails against the wrong public key', () => {
 test('verification fails when the signature is missing', () => {
   const kp = nacl.sign.keyPair()
   const manifest = signManifest(manifestFields(), kp.secretKey)
-  delete manifest.signature
-  assert.equal(verifyManifest(manifest, kp.publicKey), false)
+  const { signature, ...withoutSignature } = manifest
+  assert.equal(verifyManifest(withoutSignature, kp.publicKey), false)
 })

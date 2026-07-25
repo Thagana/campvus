@@ -6,17 +6,18 @@
 // This is the entire trust model: one known signer (the institution),
 // content-addressed by hash, no quorum or reputation needed.
 
-const crypto = require('crypto')
-const nacl = require('tweetnacl')
-const b4a = require('b4a')
+import crypto from 'crypto'
+import nacl from 'tweetnacl'
+import b4a from 'b4a'
+import { ManifestFields, ManifestInput, SignedManifest } from './types'
 
-function hashBuffer (buf) {
+export function hashBuffer (buf: Uint8Array): string {
   return crypto.createHash('sha256').update(buf).digest('hex')
 }
 
 // Canonical, deterministic string form of a manifest's signed fields.
 // Key order matters for signature verification to be reproducible.
-function canonicalManifestString (m) {
+export function canonicalManifestString (m: ManifestFields): string {
   return JSON.stringify({
     courseId: m.courseId,
     filename: m.filename,
@@ -26,7 +27,7 @@ function canonicalManifestString (m) {
   })
 }
 
-function signManifest (manifestFields, secretKey) {
+export function signManifest (manifestFields: ManifestFields, secretKey: Uint8Array): SignedManifest {
   const message = b4a.from(canonicalManifestString(manifestFields), 'utf8')
   const signature = nacl.sign.detached(message, secretKey)
   return {
@@ -35,7 +36,7 @@ function signManifest (manifestFields, secretKey) {
   }
 }
 
-function verifyManifest (manifest, publicKey) {
+export function verifyManifest (manifest: ManifestInput, publicKey: string | Uint8Array): boolean {
   const { signature, ...fields } = manifest
   if (!signature) return false
   const message = b4a.from(canonicalManifestString(fields), 'utf8')
@@ -47,5 +48,3 @@ function verifyManifest (manifest, publicKey) {
     return false
   }
 }
-
-module.exports = { hashBuffer, signManifest, verifyManifest, canonicalManifestString }

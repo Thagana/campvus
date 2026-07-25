@@ -5,15 +5,28 @@
 // in-memory buffer straight from an HTTP upload and should call
 // ingestBuffer directly, never be forced through a temp file.
 
-const fs = require('fs')
-const path = require('path')
-const { hashBuffer, signManifest } = require('./crypto-utils')
-const { loadRegistry, saveRegistry, findByHashAndCourse } = require('./manifest-store')
-const { writeContent } = require('./content-store')
-const { loadKeypair } = require('./identity')
-const { resolvePaths } = require('../config/paths')
+import fs from 'fs'
+import path from 'path'
+import { hashBuffer, signManifest } from './crypto-utils'
+import { loadRegistry, saveRegistry, findByHashAndCourse } from './manifest-store'
+import { writeContent } from './content-store'
+import { loadKeypair } from './identity'
+import { resolvePaths, Paths } from '../config/paths'
+import { Keypair, SignedManifest } from './types'
 
-function ingestBuffer ({ courseId, filename, buf, keypair, paths = resolvePaths() }) {
+export interface IngestResult {
+  manifest: SignedManifest
+  deduped: boolean
+}
+
+export function ingestBuffer (args: {
+  courseId: string
+  filename: string
+  buf: Buffer
+  keypair?: Keypair
+  paths?: Paths
+}): IngestResult {
+  const { courseId, filename, buf, keypair, paths = resolvePaths() } = args
   const hash = hashBuffer(buf)
 
   const registry = loadRegistry(paths)
@@ -38,10 +51,14 @@ function ingestBuffer ({ courseId, filename, buf, keypair, paths = resolvePaths(
   return { manifest, deduped: false }
 }
 
-function ingestFile ({ courseId, filePath, keypair, paths = resolvePaths() }) {
+export function ingestFile (args: {
+  courseId: string
+  filePath: string
+  keypair?: Keypair
+  paths?: Paths
+}): IngestResult {
+  const { courseId, filePath, keypair, paths = resolvePaths() } = args
   const buf = fs.readFileSync(filePath)
   const filename = path.basename(filePath)
   return ingestBuffer({ courseId, filename, buf, keypair, paths })
 }
-
-module.exports = { ingestBuffer, ingestFile }

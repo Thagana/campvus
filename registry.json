@@ -14,5 +14,21 @@
     "size": 22,
     "timestamp": 1785018289320,
     "signature": "525963347ff4ba95857f866dbb5bbdffb941d691c985fb0b26e2778636acc11b4181018cf5a22b232b5b45438f6b821060f421db9b7ee21bc9b982a7699ab30e"
+  },
+  {
+    "courseId": "COMSCI214",
+    "filename": "smoke-ts.txt",
+    "hash": "77f4de503d6fb7f59f8356fee8afb395bd52e9de788878cf2ead8bb5c33ab1cb",
+    "size": 38,
+    "timestamp": 1785019162045,
+    "signature": "dad2fcda211985db4621ea5f212191f561072e425ec707ee64826873fa42eb76ee37d5aaa3b3d2369df0c3435ecb4a5868f0e8039f3e691779efcda68ae3e506"
+  },
+  {
+    "courseId": "COMSCI214",
+    "filename": "react-codelab-thumbnail.png",
+    "hash": "bdfb3517c056951348ac401447d817d797b6a1d7d3750ad27aeea924c8d54dfd",
+    "size": 613900,
+    "timestamp": 1785019311929,
+    "signature": "35ab312c6d94240da1ff2f5973ce2c038a1cc6ff9bbfe52c7fe6543af6aa7984d5c66d506012b590b82d83d479d2cc76862c155f2e045e6c48a1dee2ee265008"
   }
 ]

@@ -2,10 +2,8 @@
 // joining the raw ID) avoids leaking plaintext course identifiers to the
 // wider DHT.
 
-const crypto = require('crypto')
+import crypto from 'crypto'
 
-function topicForCourse (courseId) {
+export function topicForCourse (courseId: string): Buffer {
   return crypto.createHash('sha256').update('campus-p2p-course:' + courseId).digest()
 }
-
-module.exports = { topicForCourse }

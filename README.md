@@ -10,11 +10,16 @@ building anything further:
    your own machine(s), not in a sandboxed environment.** See "The one
    thing to actually test" below.
 
+This is a TypeScript project run directly via [tsx](https://github.com/privatenumber/tsx) —
+there's no compile-to-`dist` build step yet (that's future work once real
+deployment is designed). `npx tsc --noEmit` (or `npm run typecheck`)
+type-checks without running anything.
+
 ## Setup
 
 ```
 npm install
-node src/identity.js generate
+npx tsx src/identity.ts generate
 ```
 
 This writes `institution-keys.json` (public + secret key — in production
@@ -24,7 +29,7 @@ public key. Anyone verifying content needs that public key.
 ## Simulate a lecturer upload
 
 ```
-node src/watcher.js COMSCI214 /path/to/some-file.pdf
+npx tsx src/watcher.ts COMSCI214 /path/to/some-file.pdf
 ```
 
 This hashes the file, signs a manifest with the institution key, appends
@@ -33,7 +38,7 @@ Run it again with the same file and you'll see the dedup check kick in.
 
 ## What's already proven (works today, tested)
 
-- Manifest signing and verification (`src/engine/crypto-utils.js`)
+- Manifest signing and verification (`src/engine/crypto-utils.ts`)
 - Tamper detection — flip one character in a manifest and verification
   fails
 - Content-hash addressing and dedup on re-ingest
@@ -45,9 +50,9 @@ Run this on two different laptops on the same Wi-Fi network:
 **Laptop A** (has the file already — acts as first seed):
 ```
 npm install
-node src/identity.js generate
-node src/watcher.js COMSCI214 /path/to/some-file.pdf
-node src/peer-node.js COMSCI214 --content-dir=./content-store
+npx tsx src/identity.ts generate
+npx tsx src/watcher.ts COMSCI214 /path/to/some-file.pdf
+npx tsx src/peer-node.ts COMSCI214 --content-dir=./content-store
 ```
 
 **Laptop B** (empty content dir — acts as a student device):
@@ -57,7 +62,7 @@ production this would be pre-provisioned in the app, not copy-pasted).
 
 ```
 npm install
-node src/peer-node.js COMSCI214 --content-dir=./incoming --pubkey=<paste public key hex here>
+npx tsx src/peer-node.ts COMSCI214 --content-dir=./incoming --pubkey=<paste public key hex here>
 ```
 
 If discovery works, Laptop B should print something like:
