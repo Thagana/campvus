@@ -20,8 +20,10 @@ apps/
   mode-a-desktop/       Mode A's actual near-term companion app (Electron) — wraps
                         @campvus/engine directly, tray-only until opened. See ADR-0001/0003/0004.
   mode-b-api/           @campvus/mode-b-api — Mode B's backend: direct-upload API,
-                        auth/enrollment, origin storage. Backend only, no UI yet.
-                        See its own README.
+                        auth/enrollment, origin storage. See its own README.
+  mode-b-web/           @campvus/mode-b-web — Mode B's teacher UI (React + Vite): upload
+                        files, manage courses/enrollment. No student UI yet — that needs
+                        a Node/Electron shell for real P2P, not a browser. See its own README.
   campvus/              A Kotlin Multiplatform Compose app scaffold (Android/iOS/Desktop)
                         — a separate toolchain (Gradle, not pnpm). Parked as the mobile
                         client (ADR-0002) until Hyperswarm-on-mobile is picked back up.
@@ -46,3 +48,4 @@ pnpm test        # runs each package's test script (packages/engine, apps/mode-b
 For the Mode A CLI walkthrough (generating keys, simulating a lecturer upload, running
 the peer-to-peer swarm), see [`apps/mode-a-headless/README.md`](./apps/mode-a-headless/README.md).
 For the Mode B backend API, see [`apps/mode-b-api/README.md`](./apps/mode-b-api/README.md).
+For the Mode B teacher UI, see [`apps/mode-b-web/README.md`](./apps/mode-b-web/README.md).

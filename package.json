@@ -5,9 +5,11 @@
   "description": "Campus P2P content distribution — pnpm workspace root",
   "scripts": {
     "typecheck": "pnpm -r --if-present run typecheck",
-    "test": "pnpm -r --if-present run test"
+    "test": "pnpm -r --if-present run test",
+    "dev": "concurrently -n api,web,desktop -c blue,green,magenta \"pnpm --filter @campvus/mode-b-api dev\" \"pnpm --filter @campvus/mode-b-web dev\" \"pnpm --filter mode-a-desktop start\""
   },
   "devDependencies": {
+    "concurrently": "^10.0.4",
     "typescript": "^7.0.2"
   }
 }

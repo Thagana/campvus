@@ -1,4 +1,4 @@
-# Campus P2P Content Distribution Platform — Architecture (Draft v0.6)
+# Campus P2P Content Distribution Platform — Architecture (Draft v0.7)
 
 ## 1. Problem Statement
 
@@ -45,7 +45,9 @@ For institutions with no LMS integration, or where deeper product ownership is t
 - **We own origin fallback** — our own storage becomes the "always works" fallback tier instead of the LMS's.
 - **We build UI** for two audiences: teachers (upload, manage course files) and students (browse, download, see sync/seed status).
 - **Live classes** is a plausible future feature once this exists, but it is a *different engine* — real-time audio/video (likely WebRTC/SFU), not P2P static-file caching. It should not be designed into the content-distribution engine; track it as a separate future phase (§12).
-- **Backend built:** `apps/mode-b-api` (Fastify) implements the direct-upload API, auth/enrollment, and origin storage — see §13. No UI yet.
+- **Backend built:** `apps/mode-b-api` (Fastify) implements the direct-upload API, auth/enrollment, and origin storage — see §13.
+- **Teacher UI built:** `apps/mode-b-web` (React + Vite) — login/register, create/list courses, upload files, view a course's manifest list, enroll students by email. No P2P needed for this surface (it's plain HTTP to the API), so a browser app is sufficient — unlike the student client (below).
+- **Student UI not built.** Per §5.5, a real Mode B student client needs actual swarm participation (not just centralized downloads), which means it needs the same Node/Electron shell Mode A's desktop client uses — a browser can't run Hyperswarm. Deferred; see §13.2.
 
 ### 3.3 What's actually shared (the engine, don't fork this)
 
@@ -179,6 +181,7 @@ Expanding-ring search (try LAN, widen only if no peers found within a time budge
 - A student who hasn't opened the app in a week should see and be able to request every manifest published while they were away — sync diffs against the *full current manifest list* for their courses, not just live events, so nothing is silently missed.
 - Fully offline: serve whatever's already local; no partial/incomplete state should be presented as complete.
 - Reconnect: resolve queued downloads through the normal peer-first, origin-fallback path.
+- **Peer gossip already does the "full list" diff** — `swarm-protocol.ts`'s `applyManifestsMessage` processes a peer's entire known-manifest list (not incremental events) every time, so a client back from a week offline catches up fine as soon as *any* peer is reachable. The gap this section originally flagged was the **origin** side: origin fallback (§5.6) only ever fetched file *bytes* by hash, never the manifest *list* itself — so a client with zero reachable peers had no way to learn what it was missing. `engine/manifest-sync.ts`'s `syncManifestsFromOrigin` closes that: it fetches the origin's current manifest list (`httpManifestListFetcher`, mirroring `httpOriginFetcher`'s shape) and runs it through the exact same verified diff as peer gossip — same trust model (§6), same rejection-on-bad-signature, whether the source is a peer or the origin. `apps/mode-b-api` already exposes the matching endpoint (`GET /courses/:courseId/manifests`); Mode A has no equivalent yet since there's no real LMS integration (Open Question #9).
 
 ---
 
@@ -209,10 +212,12 @@ Two integration shapes, both still valid, now understood as sub-options *within*
 | Key custody | AWS KMS (or on-prem HSM per institutional requirement) |
 | Mode A ingestion | LMS-native webhooks where available; REST API polling fallback |
 | Mode B ingestion | Direct upload API — Fastify, `apps/mode-b-api`, calls `@campvus/engine`'s `ingestBuffer` directly |
-| Mode B infra | Own auth/enrollment: SQLite via `node:sqlite` (not `better-sqlite3` — native compile fails without VS build tools) through Drizzle's `sqlite-proxy` driver, DB-backed sessions, `@node-rs/argon2` password hashing. Own origin storage: local filesystem via `@campvus/engine`'s content-store, served over HTTP (`GET /content/:hash`), gated by course enrollment. Teacher + student **UI still TBD, not yet designed** — backend only so far. |
+| Mode B infra | Own auth/enrollment: SQLite via `node:sqlite` (not `better-sqlite3` — native compile fails without VS build tools) through Drizzle's `sqlite-proxy` driver, DB-backed sessions, `@node-rs/argon2` password hashing. Own origin storage: local filesystem via `@campvus/engine`'s content-store, served over HTTP (`GET /content/:hash`), gated by course enrollment. |
+| Mode B teacher UI | React + Vite (`apps/mode-b-web`), served as static assets by `apps/mode-b-api` itself (`@fastify/static`) in production; Vite dev server proxies API calls in dev. Same-origin either way — no CORS/token handling needed. |
+| Mode B student UI | **Not built.** Needs real swarm participation (§5.5), which needs a Node/Electron shell like `apps/mode-a-desktop` — a browser can't run Hyperswarm. |
 | Mobile packaging | **Parked** — Bare mobile tooling / Pear vs. bare-RN + `nodejs-mobile` both viable in theory, neither chosen; see [ADR-0002](./adr/0002-electron-desktop-client-mobile-parked.md) |
 | Desktop packaging | Electron (`apps/mode-a-desktop`), wraps `packages/engine` directly — no native-mobile bindings needed, Node runs Hyperswarm/Hypercore natively |
-| Repo structure | pnpm workspace (`packages/engine`, `apps/mode-a-headless` CLI spike, `apps/mode-a-desktop` Electron client, `apps/mode-b-api` backend); `apps/campvus` (Expo/React Native) is the parked mobile scaffold, unwired |
+| Repo structure | pnpm workspace (`packages/engine`, `apps/mode-a-headless` CLI spike, `apps/mode-a-desktop` Electron client, `apps/mode-b-api` backend, `apps/mode-b-web` teacher UI); `apps/campvus` (Expo/React Native) is the parked mobile scaffold, unwired |
 
 ---
 
@@ -244,11 +249,11 @@ What exists today in `packages/engine` (`@campvus/engine`) + `apps/mode-a-headle
 - §5.5 student-agent protocol logic — gossip manifests, diff against local, request missing, verify-on-receipt, become-a-seed; all pure and tested. CLI-only — no real app lifecycle (foreground/background, periodic check-in).
 - **Cross-device LAN discovery (§8 Tier 1)** — confirmed on two physical laptops on the same Wi-Fi network: connected within a few seconds, full manifest-gossip → request → download → verify cycle completed. This resolves what the README called the single most important open question. See Open Question #4.
 - **§5.6 origin fallback** — `engine/origin.ts`: when content isn't obtained from any peer within a configurable timeout (`--origin-timeout-ms`, default 15s), fetches it from a configured HTTP origin (`--origin=<baseUrl>`) and verifies it against the signed manifest hash exactly like peer-delivered content. Smoke-tested with no peer available at all — the file arrived from origin alone. `httpOriginFetcher` is a generic stand-in; a real Mode A adapter would point this at the LMS's actual file endpoint.
-- **§7 seeding rules (partial)** — storage eviction is real: `engine/eviction.ts` enforces an LRU-by-last-access cap (`--max-store-bytes`), evicting oldest-accessed content first, smoke-tested. Seed-only-after-completion was already true and remains so. **Wi-Fi-only gating is a deliberate stub** (`engine/seeding-policy.ts`): plain Node.js on a laptop has no portable API to detect Wi-Fi vs. metered mobile data, so the policy interface is real and pluggable (`--seed=on|off`) but the actual network-type decision is a manual override, not real detection — that requires whatever mobile packaging (Bare/Pear) eventually runs on-device.
+- **§7 seeding rules** — storage eviction is real: `engine/eviction.ts` enforces an LRU-by-last-access cap (`--max-store-bytes`), evicting oldest-accessed content first, smoke-tested. Seed-only-after-completion was already true and remains so. **Metered-connection detection is real on Windows**: `engine/network-type.ts` shells out to PowerShell's WinRT `NetworkInformation`/`GetConnectionCost()` API (no compiled native module needed) to detect cellular/hotspot/user-marked-metered connections; `engine/seeding-policy.ts`'s `networkAwareSeedingPolicy` polls it and caches the result so seeding checks stay synchronous, defaulting to "seed freely" (per [ADR-0004](./adr/0004-desktop-seeds-freely-by-default.md)) whenever detection is undeterminable. macOS/Linux have no equivalent call yet — `isConnectionMetered` always returns `null` (unknown) on those platforms, so the manual `--seed=on|off` override (`fixedSeedingPolicy`) is still the only real control there; `--seed=auto` selects the network-aware policy where it's implemented.
 - **§8 discovery (peer preference, not real tiering)** — confirmed Hyperswarm/HyperDHT have no API to scope discovery to "LAN only" (read directly from both libraries' docs); real Tier 1/2/3 separation would need a separate mechanism (UDP broadcast/mDNS) alongside Hyperswarm, deliberately out of scope for this pass. What's built instead: requests are deduped per-hash across connected peers (only one peer is asked at a time, with a retry window if it doesn't deliver) rather than requesting the same file from everyone in parallel — a cheap improvement, not real tiering.
+- **§9 offline/sync semantics** — `engine/manifest-sync.ts`'s `syncManifestsFromOrigin` fetches the origin's full current manifest list and runs it through the same verified diff peer gossip already used, closing the gap for a client with zero reachable peers. `httpManifestListFetcher` is a generic stand-in (tested against `apps/mode-b-api`'s actual `GET /courses/:courseId/manifests` shape); no Mode A adapter wires this up yet since there's no real LMS integration to point it at (Open Question #9).
 
 **Not built yet:**
-- §9 offline/sync semantics — no "catch up on everything published while away" behavior distinct from live gossip.
 - §10 real LMS integration — watcher is still a manual CLI trigger; no webhook/polling code exists.
 - Real Tier 1/2/3 discovery separation (see above) — would need a supplementary local-network discovery mechanism, not just Hyperswarm.
 - Real Wi-Fi/mobile-data detection (see above) — needs OS-level APIs, deferred to real mobile packaging.
@@ -258,18 +263,19 @@ What exists today in `packages/engine` (`@campvus/engine`) + `apps/mode-a-headle
 
 What's still open on discovery specifically: cross-network conditions (different Wi-Fi networks, mobile hotspot, campus NAT/firewall) haven't been tested, and neither has Tier 2 (local cluster, not same LAN) or Tier 3 (wide DHT) — both still just theoretical per §8, with only the single flat topic join actually implemented.
 
-### 13.2 Mode B backend
+### 13.2 Mode B backend + teacher UI
 
-`apps/mode-b-api` (Fastify) — backend only, no UI:
+`apps/mode-b-api` (Fastify) and `apps/mode-b-web` (React + Vite):
 
-**Built and tested** (12 integration tests via Fastify's `.inject()`, no real network port):
+**Built and tested** (backend: 13 integration tests via Fastify's `.inject()`, no real network port; frontend: typecheck + `vite build` clean, full flow re-driven via curl against a live server hitting the exact routes/payloads the React code uses — **not** visually verified in a real browser, no browser-automation tool was available in this environment):
 - Direct-upload ingestion — `POST /courses/:courseId/manifests` (multipart) calls `@campvus/engine`'s `ingestBuffer` directly, teacher-role-gated per course.
 - Auth — register/login/logout, DB-backed sessions (revocable, not stateless JWTs), `@node-rs/argon2` password hashing.
 - Enrollment — per-course role (teacher/student), enforced on every course-scoped route.
 - Origin storage — `GET /content/:hash` serves bytes from `@campvus/engine`'s content-store, gated by course enrollment (not just "any valid session"). Hash format validated (`/^[0-9a-f]{64}$/`) before any filesystem lookup — closes off path traversal through this user-controlled route parameter, found and fixed while smoke-testing this pass, not left as a hypothetical.
 - Auto-provisioned institution keypair on first boot (no manual `generate` step, unlike Mode A's CLI) — logs the public key.
+- Teacher UI (`apps/mode-b-web`) — login/register, create/list courses, upload files, view a course's manifest list, enroll students by email/role. Served same-origin by `apps/mode-b-api` in production (`@fastify/static`, guarded so a fresh checkout without a frontend build still boots), proxied same-origin by Vite in dev.
 
-**Not built:** teacher/student UI, KMS-backed key custody (same local-file caveat as Mode A), `drizzle-kit` migrations (DDL applied idempotently on boot instead), institution-controlled account provisioning (registration is currently open).
+**Not built:** student UI (needs a Node/Electron shell for real swarm participation, not a browser — see §3.2), KMS-backed key custody (same local-file caveat as Mode A), `drizzle-kit` migrations (DDL applied idempotently on boot instead), institution-controlled account provisioning (registration is currently open).
 
 **Found while integration-testing, not yet solved:** Mode A's `peer-node.ts --origin` flag was pointed at a live `apps/mode-b-api` server to test whether it could serve as a real origin fallback. It can't yet, for two concrete reasons — see Open Question #9.
 

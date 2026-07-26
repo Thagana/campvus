@@ -13,7 +13,7 @@
 // Usage (via the app's CLI shim):
 //   npx tsx src/peer-node.ts <courseId> --content-dir=./content-store --pubkey=<hex>
 //   npx tsx src/peer-node.ts <courseId> --content-dir=./incoming --pubkey=<hex>
-//     [--origin=<baseUrl>] [--origin-timeout-ms=<n>] [--max-store-bytes=<n>] [--seed=on|off]
+//     [--origin=<baseUrl>] [--origin-timeout-ms=<n>] [--max-store-bytes=<n>] [--seed=on|off|auto]
 
 import path from 'path'
 import { Duplex } from 'stream'
@@ -35,7 +35,7 @@ import {
 } from './swarm-protocol'
 import { httpOriginFetcher, scheduleOriginFallback } from './origin'
 import { enforceStorageCap } from './eviction'
-import { alwaysAllowSeeding, fixedSeedingPolicy, SeedingPolicy } from './seeding-policy'
+import { alwaysAllowSeeding, fixedSeedingPolicy, networkAwareSeedingPolicy, SeedingPolicy } from './seeding-policy'
 import { Paths } from './paths'
 import { SignedManifest } from './types'
 
@@ -66,7 +66,7 @@ function parseArgs (argv: string[]): Opts {
 export async function run (argv: string[], paths: Paths): Promise<void> {
   const opts = parseArgs(argv)
   if (!opts.courseId) {
-    console.log('Usage: peer-node <courseId> --content-dir=<path> [--pubkey=<hex>] [--origin=<baseUrl>] [--max-store-bytes=<n>] [--seed=on|off]')
+    console.log('Usage: peer-node <courseId> --content-dir=<path> [--pubkey=<hex>] [--origin=<baseUrl>] [--max-store-bytes=<n>] [--seed=on|off|auto]')
     process.exit(1)
   }
   const courseId = opts.courseId
@@ -79,14 +79,17 @@ export async function run (argv: string[], paths: Paths): Promise<void> {
   const originFetcher = opts.origin ? httpOriginFetcher(opts.origin) : undefined
   const originTimeoutMs = opts['origin-timeout-ms'] ? Number(opts['origin-timeout-ms']) : DEFAULT_ORIGIN_TIMEOUT_MS
   const maxStoreBytes = opts['max-store-bytes'] ? Number(opts['max-store-bytes']) : undefined
-  const seedingPolicy: SeedingPolicy = opts.seed === 'off' ? fixedSeedingPolicy(false) : alwaysAllowSeeding()
+  const seedingPolicy: SeedingPolicy =
+    opts.seed === 'off' ? fixedSeedingPolicy(false)
+      : opts.seed === 'auto' ? networkAwareSeedingPolicy()
+        : alwaysAllowSeeding()
 
   console.log(`Course:        ${courseId}`)
   console.log(`Content dir:   ${contentDir}`)
   console.log(`Trusting key:  ${publicKeyHex.slice(0, 16)}...`)
   console.log(`Origin:        ${opts.origin ? `${opts.origin} (timeout ${originTimeoutMs}ms)` : 'none configured'}`)
   console.log(`Storage cap:   ${maxStoreBytes ? `${maxStoreBytes} bytes` : 'unlimited'}`)
-  console.log(`Seeding:       ${opts.seed === 'off' ? 'disabled (--seed=off)' : 'enabled'}`)
+  console.log(`Seeding:       ${opts.seed === 'off' ? 'disabled (--seed=off)' : opts.seed === 'auto' ? 'auto (network-type detection, Windows only today)' : 'enabled'}`)
 
   // Known manifests for this course, keyed by hash. Seeded from any local
   // registry.json (the "origin" machine will have one); other peers start

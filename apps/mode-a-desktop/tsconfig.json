@@ -1,15 +1,9 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "commonjs",
     "allowJs": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
     "noImplicitAny": true,
-    "sourceMap": true,
-    "baseUrl": ".",
-    "outDir": "dist",
-    "moduleResolution": "node",
-    "resolveJsonModule": true
-  }
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "forge.env.d.ts", "../../packages/engine/src/types/hyperswarm.d.ts"]
 }
