@@ -1,11 +1,8 @@
-// Typed client for @campvus/mode-b-api. Same-origin in both dev (via
-// Vite's proxy) and prod (served by mode-b-api itself), so no CORS/token
-// handling is needed — the browser just carries the session cookie.
-
-export interface User {
-  id: string
-  email: string
-}
+// Typed client for @campvus/mode-b-api's course/manifest endpoints.
+// Same-origin in both dev (via Vite's proxy) and prod (served by
+// mode-b-api itself), so no CORS/token handling is needed — the browser
+// just carries the session cookie. Auth itself (sign-up/sign-in/sign-out/
+// session) goes through better-auth's own client — see auth-client.ts.
 
 export interface Course {
   id: string
@@ -40,25 +37,6 @@ async function request<T> (path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(body.error || `request failed with status ${res.status}`)
   }
   return res.json() as Promise<T>
-}
-
-export function register (email: string, password: string): Promise<User> {
-  return request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) })
-}
-
-export function login (email: string, password: string): Promise<User> {
-  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
-}
-
-export async function logout (): Promise<void> {
-  await request('/auth/logout', { method: 'POST' })
-}
-
-export async function me (): Promise<User | null> {
-  const res = await fetch('/auth/me', { credentials: 'same-origin' })
-  if (res.status === 401) return null
-  if (!res.ok) throw new ApiError(`request failed with status ${res.status}`)
-  return res.json() as Promise<User>
 }
 
 export function listCourses (): Promise<Course[]> {

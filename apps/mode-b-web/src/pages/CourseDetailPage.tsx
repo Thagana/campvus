@@ -52,52 +52,62 @@ export default function CourseDetailPage (
 
   return (
     <div>
-      <button className="secondary" onClick={onBack}>&larr; Back to courses</button>
-      <h2>{courseId}</h2>
+      <button className="btn btn-ghost" onClick={onBack}>&larr; Back to courses</button>
 
-      <h3>Upload course material</h3>
-      <form className="row" onSubmit={(e) => { void handleUpload(e) }}>
-        <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <button type="submit" disabled={!file || uploading}>{uploading ? 'Uploading…' : 'Upload'}</button>
-      </form>
-      {error && <p className="error">{error}</p>}
+      <section>
+        <span className="eyebrow">Course</span>
+        <h2>{courseId}</h2>
+      </section>
 
-      <h3>Files</h3>
-      {manifests === 'loading' && <p>Loading…</p>}
-      {manifests !== 'loading' && manifests.length === 0 && <p className="muted">No files uploaded yet.</p>}
-      {manifests !== 'loading' && manifests.length > 0 && (
-        <table>
-          <thead><tr><th>Filename</th><th>Size</th><th>Uploaded</th><th>Hash</th></tr></thead>
-          <tbody>
-            {manifests.map((m) => (
-              <tr key={m.hash}>
-                <td>{m.filename}</td>
-                <td>{m.size} bytes</td>
-                <td>{new Date(m.timestamp).toLocaleString()}</td>
-                <td title={m.hash}>{m.hash.slice(0, 12)}…</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <section>
+        <h3>Upload course material</h3>
+        <form className="row" onSubmit={(e) => { void handleUpload(e) }}>
+          <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <button type="submit" className="btn btn-primary" disabled={!file || uploading}>{uploading ? 'Uploading…' : 'Upload'}</button>
+        </form>
+        {error && <p className="error">{error}</p>}
+      </section>
 
-      <h3>Enroll someone</h3>
-      <p className="muted">They must already have an account (register first).</p>
-      <form className="row" onSubmit={(e) => { void handleEnroll(e) }}>
-        <label>
-          Email
-          <input type="email" required value={enrollEmail} onChange={(e) => setEnrollEmail(e.target.value)} />
-        </label>
-        <label>
-          Role
-          <select value={enrollRole} onChange={(e) => setEnrollRole(e.target.value as 'student' | 'teacher')}>
-            <option value="student">Student</option>
-            <option value="teacher">Teacher</option>
-          </select>
-        </label>
-        <button type="submit" disabled={enrolling}>{enrolling ? 'Enrolling…' : 'Enroll'}</button>
-      </form>
-      {enrollMessage && <p className="muted">{enrollMessage}</p>}
+      <section>
+        <h3>Files</h3>
+        {manifests === 'loading' && <p className="muted">Loading…</p>}
+        {manifests !== 'loading' && manifests.length === 0 && <p className="muted">No files uploaded yet.</p>}
+        {manifests !== 'loading' && manifests.length > 0 && (
+          <table>
+            <thead><tr><th>Filename</th><th>Size</th><th>Uploaded</th><th>Hash</th></tr></thead>
+            <tbody>
+              {manifests.map((m) => (
+                <tr key={m.hash}>
+                  <td>{m.filename}</td>
+                  <td>{m.size} bytes</td>
+                  <td>{new Date(m.timestamp).toLocaleString()}</td>
+                  <td title={m.hash}>{m.hash.slice(0, 12)}…</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section>
+        <h3>Enroll someone</h3>
+        <p className="muted">They must already have an account (register first).</p>
+        <form className="row" onSubmit={(e) => { void handleEnroll(e) }}>
+          <label>
+            Email
+            <input type="email" required value={enrollEmail} onChange={(e) => setEnrollEmail(e.target.value)} />
+          </label>
+          <label>
+            Role
+            <select value={enrollRole} onChange={(e) => setEnrollRole(e.target.value as 'student' | 'teacher')}>
+              <option value="student">Student</option>
+              <option value="teacher">Teacher</option>
+            </select>
+          </label>
+          <button type="submit" className="btn btn-primary" disabled={enrolling}>{enrolling ? 'Enrolling…' : 'Enroll'}</button>
+        </form>
+        {enrollMessage && <p className="muted">{enrollMessage}</p>}
+      </section>
     </div>
   )
 }

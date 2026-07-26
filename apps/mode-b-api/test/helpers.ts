@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import crypto from 'crypto'
 import { FastifyInstance } from 'fastify'
 import { resolvePaths, Paths, generateAndSaveKeypair, loadKeypair } from '@campvus/engine'
 import { openDb, Db } from '../src/db/client'
@@ -16,7 +17,11 @@ export async function createTestApp (): Promise<{ app: FastifyInstance, db: Db }
   generateAndSaveKeypair(paths)
   const keypair = loadKeypair(paths)
   const { db } = openDb(':memory:')
-  const app = await buildServer({ db, paths, keypair })
+  // A random per-test secret, not paths.ts's ensureAuthSecret() — that
+  // persists to this app's real data/ dir, which tests (unlike tmpPaths()
+  // above) shouldn't touch.
+  const authSecret = crypto.randomBytes(32).toString('hex')
+  const app = await buildServer({ db, paths, keypair, authSecret })
   return { app, db }
 }
 
@@ -25,13 +30,17 @@ interface InjectResponseLike {
 }
 
 export function sessionCookieHeader (res: InjectResponseLike): string {
-  const cookie = res.cookies.find(c => c.name === 'campvus_session')
+  const cookie = res.cookies.find(c => c.name.endsWith('session_token'))
   if (!cookie) throw new Error('no session cookie in response')
-  return `campvus_session=${cookie.value}`
+  return `${cookie.name}=${cookie.value}`
 }
 
-export async function registerUser (app: FastifyInstance, email: string, password = 'hunter2'): Promise<string> {
-  const res = await app.inject({ method: 'POST', url: '/auth/register', payload: { email, password } })
+export async function registerUser (app: FastifyInstance, email: string, password = 'hunter22'): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/auth/sign-up/email',
+    payload: { email, password, name: email }
+  })
   return sessionCookieHeader(res)
 }
 

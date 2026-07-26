@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react'
-import { login, register, User } from '../api'
+import { authClient } from '../auth-client'
 
-export default function LoginPage ({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
+export default function LoginPage () {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -13,8 +13,12 @@ export default function LoginPage ({ onAuthenticated }: { onAuthenticated: (user
     setError(null)
     setSubmitting(true)
     try {
-      const user = mode === 'login' ? await login(email, password) : await register(email, password)
-      onAuthenticated(user)
+      // No separate "name" field in this form — email doubles as the
+      // display name, since a teacher portal pilot has no use for one yet.
+      const { error: authError } = mode === 'login'
+        ? await authClient.signIn.email({ email, password })
+        : await authClient.signUp.email({ email, password, name: email })
+      if (authError) throw new Error(authError.message)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'something went wrong')
     } finally {
@@ -24,9 +28,10 @@ export default function LoginPage ({ onAuthenticated }: { onAuthenticated: (user
 
   return (
     <div className="center">
-      <form className="card" onSubmit={(e) => { void handleSubmit(e) }}>
-        <h1>campvus</h1>
-        <p className="muted">{mode === 'login' ? 'Teacher log in' : 'Create a teacher account'}</p>
+      <form className="card login-card" onSubmit={(e) => { void handleSubmit(e) }}>
+        <span className="eyebrow">campvus</span>
+        <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+        <p className="muted">{mode === 'login' ? 'Teacher log in' : 'Set up a teacher account'}</p>
         <label>
           Email
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -36,10 +41,10 @@ export default function LoginPage ({ onAuthenticated }: { onAuthenticated: (user
           <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={submitting}>
+        <button type="submit" className="btn btn-primary" disabled={submitting}>
           {submitting ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Register'}
         </button>
-        <button type="button" className="link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+        <button type="button" className="btn btn-ghost" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
           {mode === 'login' ? "Don't have an account? Register" : 'Already have an account? Log in'}
         </button>
       </form>

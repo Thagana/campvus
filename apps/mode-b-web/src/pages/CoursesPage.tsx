@@ -32,38 +32,44 @@ export default function CoursesPage ({ onOpenCourse }: { onOpenCourse: (courseId
 
   return (
     <div>
-      <h2>Your courses</h2>
-      {courses === 'loading' && <p>Loading…</p>}
-      {courses !== 'loading' && courses.length === 0 && <p className="muted">No courses yet — create one below.</p>}
-      {courses !== 'loading' && courses.length > 0 && (
-        <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Role</th><th /></tr></thead>
-          <tbody>
-            {courses.map((c) => (
-              <tr key={c.id}>
-                <td>{c.id}</td>
-                <td>{c.name}</td>
-                <td>{c.role}</td>
-                <td><button className="secondary" onClick={() => onOpenCourse(c.id)}>Open</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <section>
+        <span className="eyebrow">Courses</span>
+        <h2>Your courses</h2>
+        {courses === 'loading' && <p className="muted">Loading…</p>}
+        {courses !== 'loading' && courses.length === 0 && <p className="muted">No courses yet — create one below.</p>}
+        {courses !== 'loading' && courses.length > 0 && (
+          <table>
+            <thead><tr><th>ID</th><th>Name</th><th>Role</th><th /></tr></thead>
+            <tbody>
+              {courses.map((c) => (
+                <tr key={c.id}>
+                  <td>{c.id}</td>
+                  <td>{c.name}</td>
+                  <td>{c.role}</td>
+                  <td><button className="btn btn-secondary" onClick={() => onOpenCourse(c.id)}>Open</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
-      <h3>Create a course</h3>
-      <form className="row" onSubmit={(e) => { void handleCreate(e) }}>
-        <label>
-          Course ID
-          <input required placeholder="COMSCI214" value={id} onChange={(e) => setId(e.target.value)} />
-        </label>
-        <label>
-          Name
-          <input required placeholder="Intro to CS" value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <button type="submit" disabled={creating}>{creating ? 'Creating…' : 'Create'}</button>
-      </form>
-      {error && <p className="error">{error}</p>}
+      <section>
+        <span className="eyebrow">New</span>
+        <h3>Create a course</h3>
+        <form className="row" onSubmit={(e) => { void handleCreate(e) }}>
+          <label>
+            Course ID
+            <input required placeholder="COMSCI214" value={id} onChange={(e) => setId(e.target.value)} />
+          </label>
+          <label>
+            Name
+            <input required placeholder="Intro to CS" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <button type="submit" className="btn btn-primary" disabled={creating}>{creating ? 'Creating…' : 'Create'}</button>
+        </form>
+        {error && <p className="error">{error}</p>}
+      </section>
     </div>
   )
 }

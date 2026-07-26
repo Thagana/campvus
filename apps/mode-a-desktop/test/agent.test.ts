@@ -55,3 +55,36 @@ test('tooltip reports the error message when in error state', () => {
 
   assert.match(agent.getTrayDescription().tooltip, /peer connection refused/)
 })
+
+test('getState reflects the same status, peer count, and error as the tray description', () => {
+  const engine = new FakeEngineEvents()
+  const agent = createAgent(engine)
+
+  engine.emitSyncStart()
+  engine.emitPeerCountChange(2)
+  engine.emitError(new Error('boom'))
+
+  assert.deepEqual(agent.getState(), { status: 'error', peerCount: 2, errorMessage: 'boom' })
+})
+
+test('onStateChange notifies subscribers with the latest state on every engine event', () => {
+  const engine = new FakeEngineEvents()
+  const agent = createAgent(engine)
+  const seen: string[] = []
+  agent.onStateChange((state) => { seen.push(state.status) })
+
+  engine.emitSyncStart()
+  engine.emitPeerCountChange(1)
+  engine.emitSyncEnd()
+
+  assert.deepEqual(seen, ['syncing', 'syncing', 'idle'])
+})
+
+test('onStateChange is not called before any engine event fires', () => {
+  const engine = new FakeEngineEvents()
+  const agent = createAgent(engine)
+  let calls = 0
+  agent.onStateChange(() => { calls++ })
+
+  assert.equal(calls, 0)
+})

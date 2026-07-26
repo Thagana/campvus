@@ -1,64 +1,35 @@
-import crypto from 'crypto'
-import { eq } from 'drizzle-orm'
 import { FastifyInstance } from 'fastify'
-import { Db } from '../db/client'
-import { users } from '../db/schema'
-import { hashPassword, verifyPassword } from '../auth/password'
-import { createSession, destroySession, SESSION_COOKIE_NAME } from '../auth/session'
-import { requireAuth } from '../auth/guards'
+import { AuthBundle } from '../auth/auth'
 
-// No institution-controlled account provisioning yet — anyone can
-// register. Fine for a pilot with a small, trusted user set; invite-only
-// or SSO provisioning is a before-real-deployment concern (open question
-// #6), not a backend-API-first one.
-export function registerAuthRoutes (app: FastifyInstance, db: Db): void {
-  app.post<{ Body: { email?: string, password?: string } }>('/auth/register', async (request, reply) => {
-    const { email, password } = request.body || {}
-    if (!email || !password) {
-      return reply.code(400).send({ error: 'email and password are required' })
+// Mounts better-auth's own handler at /api/auth/* — sign-up/sign-in/
+// sign-out/get-session/etc. all live under this one catch-all route.
+// This is the documented Fastify integration pattern: Fastify has already
+// parsed a JSON body into `request.body` by the time this handler runs, so
+// it's re-serialized into a Fetch API `Request` for `auth.handler`.
+export function registerAuthRoutes (app: FastifyInstance, { auth, fromNodeHeaders }: AuthBundle): void {
+  app.route({
+    method: ['GET', 'POST'],
+    url: '/api/auth/*',
+    handler: async (request, reply) => {
+      const url = new URL(request.url, `http://${request.headers.host}`)
+      const headers = fromNodeHeaders(request.headers)
+
+      const req = new Request(url, {
+        method: request.method,
+        headers,
+        ...(request.body ? { body: JSON.stringify(request.body) } : {})
+      })
+
+      const response = await auth.handler(req)
+
+      reply.status(response.status)
+      response.headers.forEach((value: string, key: string) => {
+        if (key.toLowerCase() !== 'set-cookie') reply.header(key, value)
+      })
+      const setCookies = response.headers.getSetCookie()
+      if (setCookies.length > 0) reply.header('set-cookie', setCookies)
+
+      return reply.send(response.body ? await response.text() : null)
     }
-
-    const existing = await db.select().from(users).where(eq(users.email, email)).limit(1)
-    if (existing[0]) {
-      return reply.code(409).send({ error: 'an account with this email already exists' })
-    }
-
-    const id = crypto.randomUUID()
-    const passwordHash = await hashPassword(password)
-    await db.insert(users).values({ id, email, passwordHash, createdAt: Date.now() })
-
-    const session = await createSession(db, id)
-    reply.setCookie(SESSION_COOKIE_NAME, session.id, { httpOnly: true, sameSite: 'lax', path: '/' })
-    return reply.code(201).send({ id, email })
-  })
-
-  app.post<{ Body: { email?: string, password?: string } }>('/auth/login', async (request, reply) => {
-    const { email, password } = request.body || {}
-    if (!email || !password) {
-      return reply.code(400).send({ error: 'email and password are required' })
-    }
-
-    const rows = await db.select().from(users).where(eq(users.email, email)).limit(1)
-    const user = rows[0]
-    if (!user || !(await verifyPassword(user.passwordHash, password))) {
-      return reply.code(401).send({ error: 'invalid email or password' })
-    }
-
-    const session = await createSession(db, user.id)
-    reply.setCookie(SESSION_COOKIE_NAME, session.id, { httpOnly: true, sameSite: 'lax', path: '/' })
-    return reply.send({ id: user.id, email: user.email })
-  })
-
-  app.post('/auth/logout', async (request, reply) => {
-    const sessionId = request.cookies[SESSION_COOKIE_NAME]
-    if (sessionId) await destroySession(db, sessionId)
-    reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' })
-    return reply.send({ ok: true })
-  })
-
-  app.get('/auth/me', async (request, reply) => {
-    const user = requireAuth(request, reply)
-    if (!user) return
-    return reply.send(user)
   })
 }

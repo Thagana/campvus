@@ -48,6 +48,7 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "@campvus/design": "workspace:*",
     "@campvus/engine": "workspace:*",
     "electron-squirrel-startup": "^1.0.1"
   }

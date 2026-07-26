@@ -11,7 +11,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/auth': API_TARGET,
+      '/api/auth': API_TARGET,
       '/courses': API_TARGET,
       '/content': API_TARGET
     }

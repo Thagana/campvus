@@ -1,11 +1,11 @@
 import path from 'path'
 import fs from 'fs'
 import fastify, { FastifyInstance } from 'fastify'
-import cookie from '@fastify/cookie'
 import multipart from '@fastify/multipart'
 import staticPlugin from '@fastify/static'
 import { Keypair, Paths } from '@campvus/engine'
 import { Db } from './db/client'
+import { createAuth } from './auth/auth'
 import { installRequestUser } from './auth/guards'
 import { registerAuthRoutes } from './routes/auth'
 import { registerCourseRoutes } from './routes/courses'
@@ -16,6 +16,7 @@ export interface ServerDeps {
   db: Db
   paths: Paths
   keypair: Keypair
+  authSecret: string
 }
 
 const WEB_DIST = path.join(__dirname, '..', '..', 'mode-b-web', 'dist')
@@ -23,12 +24,13 @@ const WEB_DIST = path.join(__dirname, '..', '..', 'mode-b-web', 'dist')
 export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
   const app = fastify({ logger: false })
 
-  await app.register(cookie)
   await app.register(multipart)
 
-  installRequestUser(app, deps.db)
+  const auth = await createAuth(deps.db, deps.authSecret)
 
-  registerAuthRoutes(app, deps.db)
+  installRequestUser(app, auth)
+
+  registerAuthRoutes(app, auth)
   registerCourseRoutes(app, deps.db)
   registerManifestRoutes(app, deps.db, deps.paths, deps.keypair)
   registerContentRoutes(app, deps.db, deps.paths)

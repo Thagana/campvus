@@ -3,7 +3,8 @@
   "compilerOptions": {
     "allowJs": true,
     "noImplicitAny": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "forge.env.d.ts", "../../packages/engine/src/types/hyperswarm.d.ts"]
 }

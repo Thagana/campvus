@@ -1,16 +1,22 @@
-// Request-level auth/authorization guards. `installRequestUser` wires the
-// session cookie -> `request.user` on every request; `requireAuth` and
-// `requireCourseRole` are called at the top of route handlers to enforce
-// the two things Mode B routes actually need: "is anyone logged in" and
-// "is this specific user a teacher/student of this specific course."
-// Enrollment is per-course (§3.2 — a person can be a teacher in one course
-// and a student in another), so role checks always take a courseId.
+// Request-level auth/authorization guards. `installRequestUser` wires
+// better-auth's session lookup -> `request.user` on every request;
+// `requireAuth` and `requireCourseRole` are called at the top of route
+// handlers to enforce the two things Mode B routes actually need: "is
+// anyone logged in" and "is this specific user a teacher/student of this
+// specific course." Enrollment is per-course (§3.2 — a person can be a
+// teacher in one course and a student in another), so role checks always
+// take a courseId.
 
 import { and, eq } from 'drizzle-orm'
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { Db } from '../db/client'
 import { enrollments } from '../db/schema'
-import { getSessionUser, SessionUser, SESSION_COOKIE_NAME } from './session'
+import { AuthBundle } from './auth'
+
+export interface SessionUser {
+  id: string
+  email: string
+}
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -18,11 +24,11 @@ declare module 'fastify' {
   }
 }
 
-export function installRequestUser (app: FastifyInstance, db: Db): void {
+export function installRequestUser (app: FastifyInstance, { auth, fromNodeHeaders }: AuthBundle): void {
   app.decorateRequest('user', null)
   app.addHook('onRequest', async (request) => {
-    const sessionId = request.cookies[SESSION_COOKIE_NAME]
-    request.user = sessionId ? await getSessionUser(db, sessionId) : null
+    const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) })
+    request.user = session ? { id: session.user.id, email: session.user.email } : null
   })
 }
 

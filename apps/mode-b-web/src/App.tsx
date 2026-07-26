@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { me, logout, User } from './api'
+import { useCallback, useState } from 'react'
+import { authClient } from './auth-client'
 import LoginPage from './pages/LoginPage'
 import CoursesPage from './pages/CoursesPage'
 import CourseDetailPage from './pages/CourseDetailPage'
@@ -7,36 +7,31 @@ import CourseDetailPage from './pages/CourseDetailPage'
 type View = { name: 'courses' } | { name: 'course', courseId: string }
 
 export default function App () {
-  const [user, setUser] = useState<User | null | 'loading'>('loading')
+  const { data: session, isPending } = authClient.useSession()
   const [view, setView] = useState<View>({ name: 'courses' })
 
-  useEffect(() => {
-    me().then(setUser).catch(() => setUser(null))
-  }, [])
-
   const handleLogout = useCallback(() => {
-    logout().then(() => {
-      setUser(null)
+    authClient.signOut().then(() => {
       setView({ name: 'courses' })
     }).catch(() => {})
   }, [])
 
-  if (user === 'loading') {
+  if (isPending) {
     return <div className="center">Loading…</div>
   }
 
-  if (!user) {
-    return <LoginPage onAuthenticated={setUser} />
+  if (!session) {
+    return <LoginPage />
   }
 
   return (
     <div className="app">
       <header className="topbar">
-        <strong>campvus</strong>
-        <span>teacher portal</span>
+        <span className="brand">campvus</span>
+        <span className="eyebrow">Teacher portal</span>
         <span className="spacer" />
-        <span>{user.email}</span>
-        <button className="secondary" onClick={handleLogout}>Log out</button>
+        <span className="muted">{session.user.email}</span>
+        <button className="btn btn-secondary" onClick={handleLogout}>Log out</button>
       </header>
       <main>
         {view.name === 'courses' && (

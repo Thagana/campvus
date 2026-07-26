@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { and, eq } from 'drizzle-orm'
 import { FastifyInstance } from 'fastify'
 import { Db } from '../db/client'
-import { courses, enrollments, users } from '../db/schema'
+import { courses, enrollments, user } from '../db/schema'
 import { requireAuth, requireCourseRole } from '../auth/guards'
 
 export function registerCourseRoutes (app: FastifyInstance, db: Db): void {
@@ -57,7 +57,7 @@ export function registerCourseRoutes (app: FastifyInstance, db: Db): void {
         return reply.code(400).send({ error: 'email and role ("teacher" | "student") are required' })
       }
 
-      const rows = await db.select().from(users).where(eq(users.email, email)).limit(1)
+      const rows = await db.select().from(user).where(eq(user.email, email)).limit(1)
       const student = rows[0]
       if (!student) {
         return reply.code(404).send({ error: 'no account with this email — they must register first' })
