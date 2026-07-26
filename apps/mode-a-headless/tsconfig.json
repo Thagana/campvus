@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  // No build step yet (see README) — this app's tsc run re-parses
+  // @campvus/engine's .ts source directly rather than a compiled .d.ts
+  // rollup, so it also needs the engine's ambient hyperswarm.d.ts in its
+  // own `include` to see that declaration. Revisit once a real build step
+  // exists (project references / declaration output would make this
+  // invisible to consumers).
+  "include": ["src/**/*.ts", "../../packages/engine/src/types/**/*.d.ts"]
+}

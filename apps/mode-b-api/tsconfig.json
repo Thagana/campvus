@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Explicit, because with fastify/drizzle's larger dependency tree
+    // pulling in more @types/* packages, TS's automatic @types-inclusion
+    // silently stopped finding @types/node at all here (console/process/
+    // node:sqlite all failed to resolve) — unlike the other, dependency-lighter
+    // packages in this workspace where the implicit default still worked.
+    "types": ["node"]
+  },
+  // No build step yet — this app's tsc run re-parses @campvus/engine's .ts
+  // source directly, so it also needs the engine's ambient hyperswarm.d.ts
+  // in its own `include` to see that declaration (same reason as
+  // apps/mode-a-headless). Revisit once a real build step exists.
+  "include": ["src/**/*.ts", "test/**/*.ts", "../../packages/engine/src/types/**/*.d.ts"]
+}

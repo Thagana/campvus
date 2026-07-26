@@ -1,24 +1,13 @@
 {
-  "name": "campus-p2p-mvp",
+  "name": "campvus",
+  "private": true,
   "version": "1.0.0",
-  "description": "",
-  "main": "src/engine/index.ts",
+  "description": "Campus P2P content distribution — pnpm workspace root",
   "scripts": {
-    "test": "tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "b4a": "^1.8.1",
-    "hyperswarm": "^4.17.0",
-    "tweetnacl": "^1.0.3"
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test"
   },
   "devDependencies": {
-    "@types/b4a": "^1.6.5",
-    "@types/node": "^26.1.1",
-    "tsx": "^4.23.1",
     "typescript": "^7.0.2"
   }
 }

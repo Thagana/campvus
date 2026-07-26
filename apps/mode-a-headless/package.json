@@ -1,0 +1,17 @@
+{
+  "name": "@campvus/mode-a-headless",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mode A: headless P2P accelerator that sits beside an existing LMS. CLI-only, no UI of our own.",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@campvus/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  }
+}
