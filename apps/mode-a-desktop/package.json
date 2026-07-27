@@ -1,12 +1,12 @@
 {
   "name": "mode-a-desktop",
   "productName": "mode-a-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
-    "start": "electron-forge start",
+    "start": "cross-env CAMPVUS_INSTITUTION_PUBLIC_KEY=67c21673aecb8ce7033f1a0525fc9067c36dc0d46980493ab27bc2dbecddd563 electron-forge start",
     "build": "tsc --noEmit && electron-forge make",
     "package": "electron-forge package",
     "make": "electron-forge make",
@@ -40,6 +40,7 @@
     "@types/electron-squirrel-startup": "^1.0.2",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
+    "cross-env": "^7.0.3",
     "electron": "^43.2.0",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",

@@ -39,6 +39,16 @@ export async function createAuth (db: Db, secret: string) {
     session: {
       expiresIn: THIRTY_DAYS_SECONDS // matches the previous hand-rolled session TTL
     },
+    // better-auth's origin-check middleware forces validation on any request
+    // carrying Sec-Fetch-Site/Mode/Dest (i.e. every browser fetch()) against
+    // this list, regardless of how "same-origin" the deployment actually is
+    // (see vite.config.ts) — it has no notion of the dev proxy. Without an
+    // entry here every sign-up/sign-in from the Vite dev server 403s
+    // (INVALID_ORIGIN). Production's origin is covered automatically:
+    // better-auth folds BETTER_AUTH_URL/BETTER_AUTH_TRUSTED_ORIGINS env vars
+    // into this list on its own, so set BETTER_AUTH_URL to the deployed
+    // origin there instead of hardcoding it here.
+    trustedOrigins: ['http://localhost:5173'],
     plugins: [
       organizationPlugin({
         ac: roles.ac,

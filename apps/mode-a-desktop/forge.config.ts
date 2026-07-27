@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
@@ -5,11 +7,93 @@ import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
+import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+
+// The app has no i18n — Chromium's bundled locale .pak files (~46MB across
+// 55 languages) are pure dead weight. Keep only en-US, the locale Electron
+// falls back to when a requested locale's .pak is missing.
+const KEPT_LOCALES = new Set(['en-US.pak']);
+
+// vite.main.config.ts leaves `hyperswarm` as a real require() (its dependency
+// tree ships native .node addons Vite can't bundle). In dev that require()
+// resolves fine because pnpm's `nodeLinker: hoisted` setting hoists it up to
+// the monorepo root node_modules and Node's resolver walks up to find it —
+// but electron-packager only copies this app's own directory, so the
+// packaged app shipped with no node_modules at all and crashed at launch
+// with "Cannot find module 'hyperswarm'". Walk the same directories Node's
+// resolver would, and copy the whole runtime dependency closure in ourselves.
+async function findPackageDir (name: string, fromDir: string): Promise<string> {
+  let dir = fromDir;
+  for (;;) {
+    const candidate = path.join(dir, 'node_modules', name);
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      const parent = path.dirname(dir);
+      if (parent === dir) throw new Error(`Cannot resolve package "${name}" from ${fromDir}`);
+      dir = parent;
+    }
+  }
+}
+
+async function copyDependencyClosure (rootDir: string, destNodeModules: string, names: string[]): Promise<void> {
+  const copied = new Set<string>();
+  async function copyOne (name: string, fromDir: string, optional: boolean): Promise<void> {
+    if (copied.has(name)) return;
+    copied.add(name);
+    let pkgDir: string;
+    try {
+      pkgDir = await findPackageDir(name, fromDir);
+    } catch (err) {
+      // Optional deps (e.g. platform-specific native prebuild fallbacks) may
+      // genuinely not be installed on this machine/platform — skip those.
+      if (optional) return;
+      throw err;
+    }
+    await fs.cp(pkgDir, path.join(destNodeModules, name), { recursive: true });
+    const pkgJson = JSON.parse(await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8'));
+    await Promise.all([
+      ...Object.keys(pkgJson.dependencies ?? {}).map((dep) => copyOne(dep, pkgDir, false)),
+      ...Object.keys(pkgJson.optionalDependencies ?? {}).map((dep) => copyOne(dep, pkgDir, true)),
+    ]);
+  }
+  await Promise.all(names.map((name) => copyOne(name, rootDir, false)));
+}
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    afterCopy: [
+      async (buildPath, _electronVersion, _platform, _arch, callback) => {
+        // `buildPath` here is `<staging>/resources/app` — the flat
+        // Chromium `locales/` dir lives two levels up, as a sibling of
+        // `resources/`.
+        const localesDir = path.join(buildPath, '..', '..', 'locales');
+        try {
+          const files = await fs.readdir(localesDir);
+          await Promise.all(
+            files
+              .filter((file) => !KEPT_LOCALES.has(file))
+              .map((file) => fs.rm(path.join(localesDir, file)))
+          );
+          callback();
+        } catch (err) {
+          // No flat `locales` dir on this platform/layout (e.g. macOS) —
+          // nothing to prune.
+          callback();
+        }
+      },
+      async (buildPath, _electronVersion, _platform, _arch, callback) => {
+        try {
+          await copyDependencyClosure(__dirname, path.join(buildPath, 'node_modules'), ['hyperswarm']);
+          callback();
+        } catch (err) {
+          callback(err as Error);
+        }
+      },
+    ],
   },
   rebuildConfig: {},
   makers: [
@@ -42,6 +126,9 @@ const config: ForgeConfig = {
         },
       ],
     }),
+    // hyperswarm's dependency tree ships native .node addons — asar can't
+    // dlopen a binary from inside the archive, so they must be unpacked.
+    new AutoUnpackNativesPlugin({}),
     // Fuses are used to enable/disable various Electron functionality
     // at package time, before code signing the application
     new FusesPlugin({

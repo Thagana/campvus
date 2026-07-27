@@ -85,11 +85,11 @@ const ICON_COLORS: Record<string, string> = {
 };
 
 function trayIcon(status: string): Electron.NativeImage {
-  // Placeholder solid-color 16x16 icons — real icon art is a follow-up
-  // design task, not an engineering one; the status→color mapping is what
-  // this pass wires up.
+  // A "C" monogram (open ring, gap on the right) rendered as a 16x16 arc —
+  // legible at tray size without needing a rasterized asset. Recolored per
+  // status so the mark itself doubles as the state indicator.
   const color = ICON_COLORS[status] ?? ICON_COLORS.idle;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M12.6 4.14 A6 6 0 1 0 12.6 11.86" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round"/></svg>`;
   return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
 }
 
