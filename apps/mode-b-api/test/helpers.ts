@@ -51,7 +51,7 @@ export async function createSchoolWithOwner (
   app: FastifyInstance,
   db: Db,
   { name, founderEmail }: { name: string, founderEmail: string }
-): Promise<{ organizationId: string, ownerCookie: string }> {
+): Promise<{ organizationId: string, ownerCookie: string, ownerMemberId: string }> {
   const { organizationId, invitationId } = await createSchool(db, { name, founderEmail })
   const ownerCookie = await registerUser(app, founderEmail)
   const accept = await app.inject({
@@ -61,7 +61,7 @@ export async function createSchoolWithOwner (
     payload: { invitationId }
   })
   if (accept.statusCode !== 200) throw new Error(`founding Owner failed to accept invitation: ${accept.body}`)
-  return { organizationId, ownerCookie }
+  return { organizationId, ownerCookie, ownerMemberId: accept.json().member.id }
 }
 
 // The invite-member -> sign-up -> accept-invitation triad, for tests that
@@ -70,7 +70,7 @@ export async function createSchoolWithOwner (
 export async function inviteAndAccept (
   app: FastifyInstance,
   { organizationId, inviterCookie, email, role }: { organizationId: string, inviterCookie: string, email: string, role: string }
-): Promise<{ invitationId: string, cookie: string, member: { role: string } }> {
+): Promise<{ invitationId: string, cookie: string, member: { id: string, role: string } }> {
   const invite = await app.inject({
     method: 'POST',
     url: '/api/auth/organization/invite-member',

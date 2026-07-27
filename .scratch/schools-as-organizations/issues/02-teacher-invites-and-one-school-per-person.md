@@ -8,12 +8,14 @@ accepted member of any other School, enforcing that a person belongs to exactly 
 
 **Blocked by:** 01
 
-- [ ] A Teacher can invite another Teacher by email; that person can accept and their role is
+**Status:** done (commit `5679167`)
+
+- [x] A Teacher can invite another Teacher by email; that person can accept and their role is
       `teacher`
-- [ ] A Teacher can invite a Student by email; that person can accept and their role is `student`
-- [ ] An invited email with no existing account can sign up after being invited and then see and
+- [x] A Teacher can invite a Student by email; that person can accept and their role is `student`
+- [x] An invited email with no existing account can sign up after being invited and then see and
       accept the pending invitation
-- [ ] A Student attempting to invite anyone is denied
-- [ ] A person who is already an accepted member of School A has their attempt to accept an
+- [x] A Student attempting to invite anyone is denied
+- [x] A person who is already an accepted member of School A has their attempt to accept an
       invitation to School B rejected
-- [ ] Tests use the existing `createTestApp()` + `app.inject()` HTTP seam throughout
+- [x] Tests use the existing `createTestApp()` + `app.inject()` HTTP seam throughout
