@@ -49,3 +49,7 @@ For the Mode A CLI walkthrough (generating keys, simulating a lecturer upload, r
 the peer-to-peer swarm), see [`apps/mode-a-headless/README.md`](./apps/mode-a-headless/README.md).
 For the Mode B backend API, see [`apps/mode-b-api/README.md`](./apps/mode-b-api/README.md).
 For the Mode B teacher UI, see [`apps/mode-b-web/README.md`](./apps/mode-b-web/README.md).
+
+To test it yourself, run the desktop app with:
+CAMPVUS_COURSE_ID=COMSCI214 CAMPVUS_INSTITUTION_PUBLIC_KEY=<paste from apps/mode-a-headless/institution-keys.json> pnpm --filter mode-a-desktop start
+alongside a headless peer-node (or a second desktop instance) on the same course/network — the tray should now show real peer counts and sync status instead of "idle, 0 peers" always.

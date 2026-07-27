@@ -1,0 +1,25 @@
+node_modules
+.git
+.scratch
+
+# Local dev runtime state — must never be baked into the image (this would
+# ship a real institution private key and a dev's uploaded content in every
+# build). Production generates its own on first boot into the mounted
+# volume — see apps/mode-b-api/src/paths.ts (DATA_DIR).
+apps/mode-b-api/data
+apps/mode-b-api/content-store
+apps/mode-b-api/registry.json
+apps/mode-b-api/institution-keys.json
+
+# Rebuilt fresh in the builder stage; a stale local build shouldn't leak in.
+apps/mode-b-web/dist
+
+# Not part of this image (Mode A only).
+apps/mode-a-desktop
+apps/mode-a-headless
+apps/campvus
+
+Dockerfile
+.dockerignore
+fly.toml
+**/*.log

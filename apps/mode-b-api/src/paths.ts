@@ -12,12 +12,20 @@ import { resolvePaths, Paths, generateAndSaveKeypair } from '@campvus/engine'
 
 const APP_ROOT = path.join(__dirname, '..')
 
+// Where runtime state (registry.json, institution-keys.json, content-store/,
+// data/) is written. Defaults to APP_ROOT for local/dev use, unchanged from
+// before. In a container, APP_ROOT also holds the application code, so a
+// deployment that wants a persistent volume (e.g. a Fly volume, which
+// replaces whatever's at its mount point) must point DATA_DIR somewhere
+// other than the code directory — see fly.toml's DATA_DIR env var.
+const DATA_ROOT = process.env.DATA_DIR || APP_ROOT
+
 export function getPaths (): Paths {
-  return resolvePaths(APP_ROOT)
+  return resolvePaths(DATA_ROOT)
 }
 
 export function getDbPath (): string {
-  const dir = path.join(APP_ROOT, 'data')
+  const dir = path.join(DATA_ROOT, 'data')
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   return path.join(dir, 'app.db')
 }
@@ -40,7 +48,7 @@ export function ensureInstitutionKeypair (paths: Paths): void {
 }
 
 function getAuthSecretPath (): string {
-  const dir = path.join(APP_ROOT, 'data')
+  const dir = path.join(DATA_ROOT, 'data')
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   return path.join(dir, 'auth-secret.key')
 }

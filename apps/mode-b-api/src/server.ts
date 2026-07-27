@@ -22,7 +22,13 @@ export interface ServerDeps {
 const WEB_DIST = path.join(__dirname, '..', '..', 'mode-b-web', 'dist')
 
 export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
-  const app = fastify({ logger: false })
+  // trustProxy: this sits behind Fly's edge proxy (TLS terminates there,
+  // plain HTTP internally) — without it req.ip/req.protocol would reflect
+  // the proxy hop, not the real client.
+  const app = fastify({ logger: false, trustProxy: true })
+
+  // Unauthenticated by design — Fly's http_service health check polls this.
+  app.get('/healthz', async () => ({ ok: true }))
 
   await app.register(multipart)
 

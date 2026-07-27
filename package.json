@@ -6,7 +6,8 @@
   "scripts": {
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
-    "dev": "concurrently -n api,web,desktop -c blue,green,magenta \"pnpm --filter @campvus/mode-b-api dev\" \"pnpm --filter @campvus/mode-b-web dev\" \"pnpm --filter mode-a-desktop start\""
+    "dev": "concurrently -n api,web,desktop -c blue,green,magenta \"pnpm --filter @campvus/mode-b-api dev\" \"pnpm --filter @campvus/mode-b-web dev\" \"pnpm --filter mode-a-desktop start\"",
+    "build": "pnpm --filter @campvus/mode-b-web build && pnpm --filter mode-a-desktop build"
   },
   "devDependencies": {
     "concurrently": "^10.0.4",
