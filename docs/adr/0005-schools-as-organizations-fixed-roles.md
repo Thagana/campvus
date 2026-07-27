@@ -9,7 +9,9 @@ school, which has a fixed staff/student population that someone else provisions.
 
 ## Decision
 
-Each School (the term we use going forward, replacing "institution" elsewhere in this repo)
+Each School (the term we use going forward for the auth/enrollment concept — replacing
+"institution" as used in ARCHITECTURE.md's registration/provisioning language, though
+"institution" itself stays in use for the unrelated manifest-signing keypair; see CONTEXT.md)
 is a better-auth Organization. Schools are created only by us, via an internal script — never
 through self-service sign-up. That script seeds the School's first Teacher as its `owner` in
 the same operation, so a School never exists without someone able to manage it.

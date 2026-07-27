@@ -60,6 +60,34 @@ CREATE TABLE IF NOT EXISTS verification (
   updated_at INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS organization (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  logo TEXT,
+  created_at INTEGER NOT NULL,
+  metadata TEXT
+);
+
+CREATE TABLE IF NOT EXISTS member (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL REFERENCES organization(id),
+  user_id TEXT NOT NULL REFERENCES user(id),
+  role TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS invitation (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL REFERENCES organization(id),
+  email TEXT NOT NULL,
+  role TEXT,
+  status TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  inviter_id TEXT REFERENCES user(id)
+);
+
 CREATE TABLE IF NOT EXISTS courses (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

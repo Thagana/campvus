@@ -64,6 +64,43 @@ export const verification = sqliteTable('verification', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
 })
 
+// better-auth's `organization` plugin schema (ADR-0005) — a School is one
+// row here. Hand-written to match the plugin's field list exactly, same
+// reasoning as the core tables above.
+export const organization = sqliteTable('organization', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logo: text('logo'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  metadata: text('metadata')
+})
+
+export const member = sqliteTable('member', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organization.id),
+  userId: text('user_id').notNull().references(() => user.id),
+  role: text('role').notNull(), // 'owner' | 'teacher' | 'student'
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull()
+})
+
+export const invitation = sqliteTable('invitation', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organization.id),
+  email: text('email').notNull(),
+  role: text('role'), // 'owner' | 'teacher' | 'student'
+  status: text('status').notNull(), // 'pending' | 'accepted' | 'rejected' | 'canceled'
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  // Nullable unlike better-auth's own (required) field definition: the
+  // school-creation script inserts a School's founding Owner invitation
+  // directly (bypassing the invite-member endpoint, which needs an
+  // authenticated inviter that doesn't exist yet), and better-auth's own
+  // accept-invitation handler never reads inviterId, so leaving it null
+  // for that one row is safe.
+  inviterId: text('inviter_id').references(() => user.id)
+})
+
 // courseId matches the engine's courseId convention (e.g. "COMSCI214") —
 // the same string that ends up in signed manifests, not an opaque id.
 export const courses = sqliteTable('courses', {

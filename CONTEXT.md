@@ -7,10 +7,22 @@ only — Mode A borrows enrollment from the host LMS and has no accounts of its 
 ## Language
 
 **School**:
-An educational institution using Mode B, modeled as a better-auth Organization. Created only
-by us (system admins) via an internal script — never through in-app self-service sign-up. See
+A Mode B customer, modeled as a better-auth Organization: the auth/enrollment boundary that
+Teachers and Students belong to. Created only by us (system admins) via an internal script —
+never through in-app self-service sign-up. See
 [ADR-0005](./docs/adr/0005-schools-as-organizations-fixed-roles.md).
-_Avoid_: Institution, org (org is the underlying better-auth mechanism; School is the domain term)
+_Avoid_: Org (the underlying better-auth mechanism; School is the domain term). Not to be
+confused with **Institution** below — they coincide one-to-one in Mode B today, but are
+different layers.
+
+**Institution**:
+The holder of the manifest-signing keypair/trust root (`ensureInstitutionKeypair`,
+`paths.keyFile`) — an engine-level (`@campvus/engine`) concept that predates Schools and
+applies to Mode A too, which has no Schools at all. ARCHITECTURE.md's open question #2
+("multi-institution model") is about this keypair, not about auth. In Mode B, a School and
+its Institution keypair happen to be the same real-world customer, but the code paths are
+independent — renaming one doesn't rename the other.
+_Avoid_: Using "Institution" for the auth/enrollment concept — that's School.
 
 **Teacher**:
 A School member with access to every Course in that School, and the ability to invite new
