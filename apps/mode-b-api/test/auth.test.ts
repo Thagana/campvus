@@ -63,8 +63,12 @@ test('a protected route requires a valid session', async () => {
     payload: { email: 'a@b.com', password: 'hunter22', name: 'a@b.com' }
   })
   const cookie = sessionCookieHeader(reg)
+  // 403, not 401: authentication now passes (proving the session-cookie
+  // check above works), but /courses also requires School membership
+  // (ADR-0005) — this account has none. See courses.test.ts for the
+  // School-membership-specific behavior.
   const courses = await app.inject({ method: 'GET', url: '/courses', headers: { cookie } })
-  assert.equal(courses.statusCode, 200)
+  assert.equal(courses.statusCode, 403)
 })
 
 test('get-session reflects the signed-in user', async () => {

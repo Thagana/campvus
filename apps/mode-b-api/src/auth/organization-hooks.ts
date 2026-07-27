@@ -1,12 +1,7 @@
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import { Db } from '../db/client'
 import { member } from '../db/schema'
-
-const GRANTABLE_ROLES = new Set(['teacher', 'student'])
-// Owner counts as staff for the last-Teacher guard even though it's never
-// grantable through invite/role-update (see assertGrantableRole below) —
-// it's only ever assigned once, by the school-creation script.
-const STAFF_ROLES = ['teacher', 'owner']
+import { GRANTABLE_ROLES, STAFF_ROLES } from './school-roles'
 
 type MemberSnapshot = { id: string, role: string, organizationId: string }
 

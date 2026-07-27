@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS invitation (
 
 CREATE TABLE IF NOT EXISTS courses (
   id TEXT PRIMARY KEY,
+  school_id TEXT NOT NULL REFERENCES organization(id),
   name TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );

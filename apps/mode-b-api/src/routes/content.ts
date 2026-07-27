@@ -1,15 +1,15 @@
-import { eq } from 'drizzle-orm'
 import { FastifyInstance } from 'fastify'
 import { hasContent, readContent, loadRegistry, Paths } from '@campvus/engine'
 import { Db } from '../db/client'
-import { enrollments } from '../db/schema'
-import { requireAuth } from '../auth/guards'
+import { accessibleCourseIds, requireAuth } from '../auth/guards'
 
 // This endpoint IS the "origin" §5.6 describes: Mode A's peer-node.ts
 // --origin=<baseUrl> flag can point straight at
 // `<baseUrl>/content/<hash>` and get exactly the fallback behaviour it
-// already implements. Gated by enrollment, not just "any valid session" —
-// a hash is unguessable, but one course's content shouldn't be fetchable
+// already implements. Gated by course access (Teacher: every Course in
+// their School; Student: Courses they hold an Enrollment in — see
+// auth/guards.ts's accessibleCourseIds), not just "any valid session" — a
+// hash is unguessable, but one course's content shouldn't be fetchable
 // just because you're logged in as a user of a *different* course.
 // Content is always addressed by a sha256 hex digest (see
 // engine/crypto-utils.ts's hashBuffer) — 64 lowercase hex characters.
@@ -32,12 +32,9 @@ export function registerContentRoutes (app: FastifyInstance, db: Db, paths: Path
       return reply.code(404).send({ error: 'no content for this hash' })
     }
 
-    const enrolledCourseIds = (await db.select({ courseId: enrollments.courseId })
-      .from(enrollments)
-      .where(eq(enrollments.userId, user.id))
-    ).map(r => r.courseId)
+    const courseIds = await accessibleCourseIds(db, user.id)
 
-    const manifest = loadRegistry(paths).find(m => m.hash === hash && enrolledCourseIds.includes(m.courseId))
+    const manifest = loadRegistry(paths).find(m => m.hash === hash && courseIds.includes(m.courseId))
     if (!manifest) {
       return reply.code(403).send({ error: 'not enrolled in a course this content belongs to' })
     }
