@@ -24,7 +24,8 @@ import { loadRegistry } from './manifest-store'
 import { listContentHashes, readContent, writeContent, touchContent } from './content-store'
 import { loadPublicKeyHex } from './identity'
 import { verifyManifest } from './crypto-utils'
-import { topicForCourse } from './topics'
+import { topicForCourse, topicForCourseAndRegion } from './topics'
+import { createLanDiscovery, LanDiscovery } from './lan-discovery'
 import {
   planManifestsAnnouncement,
   applyManifestsMessage,
@@ -59,6 +60,11 @@ export interface SwarmNodeOptions {
   originTimeoutMs?: number
   maxStoreBytes?: number
   seedingPolicy?: SeedingPolicy
+  // Tier 2 (ADR-0006): an admin-configured tag ("nearby but not same LAN,
+  // same suburb" per §8, approximated by whoever runs the node setting the
+  // same tag). Unset means no Tier 2 topic is joined — Tier 1 (LAN) and
+  // Tier 3 (wide DHT) still apply on their own.
+  region?: string
   // Defaults to console.log. The CLI shim relies on that default to print
   // its documented per-peer trace; callers that already have their own
   // logging (or want it silenced, e.g. tests) can override it.
@@ -77,7 +83,7 @@ export interface SwarmNode {
 export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
   const {
     courseId, contentDir, publicKeyHex, paths,
-    originFetcher, maxStoreBytes,
+    originFetcher, maxStoreBytes, region,
     originTimeoutMs = DEFAULT_ORIGIN_TIMEOUT_MS,
     seedingPolicy = alwaysAllowSeeding(),
     log = (line: string) => console.log(line)
@@ -110,6 +116,8 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
   const originScheduled = new Set<string>()
 
   let swarm: Hyperswarm | undefined
+  let lanDiscovery: LanDiscovery | undefined
+  let lanPeerCounter = 0
 
   function scheduleRetryClear (hash: string): void {
     if (retryScheduled.has(hash)) return
@@ -206,6 +214,46 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
     }
   }
 
+  // Shared by both discovery paths (ADR-0006): a Hyperswarm 'connection'
+  // event and a lan-discovery.ts TCP socket both end up here, since the
+  // wire protocol (handleMessage/send) only needs a Duplex and has no
+  // opinion on how the connection was established.
+  function attachPeer (conn: Duplex, peerId: string): void {
+    log(`\n[peer ${peerId}] connected`)
+    tracker.peerConnected()
+
+    let buffer = ''
+    conn.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf8')
+      let idx
+      while ((idx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 1)
+        if (line.trim().length === 0) continue
+        try {
+          handleMessage(JSON.parse(line) as WireMessage, conn, peerId)
+        } catch (err) {
+          // A malformed line from one peer must not take down a
+          // long-running desktop process — surface it and move on,
+          // instead of letting the exception escape this event handler.
+          emitError(err instanceof Error ? err : new Error(String(err)))
+        }
+      }
+    })
+
+    // Per-peer connection errors are transient (one flaky peer) and
+    // already recoverable — logged, not routed to onError, so the tray
+    // doesn't flip to a global error state over one peer's hiccup.
+    conn.on('error', (err: Error) => log(`[peer ${peerId}] connection error: ${err.message}`))
+    conn.on('close', () => {
+      log(`[peer ${peerId}] disconnected`)
+      tracker.peerDisconnected()
+    })
+
+    // Announce every manifest we know of for this course.
+    send(conn, planManifestsAnnouncement(knownManifests))
+  }
+
   return {
     onPeerCountChange: tracker.onPeerCountChange,
     onSyncStart: tracker.onSyncStart,
@@ -223,41 +271,18 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
       }
 
       swarm.on('connection', (conn: Duplex, info) => {
-        const peerId = b4a.toString(info.publicKey, 'hex').slice(0, 8)
-        log(`\n[peer ${peerId}] connected`)
-        tracker.peerConnected()
-
-        let buffer = ''
-        conn.on('data', (chunk: Buffer) => {
-          buffer += chunk.toString('utf8')
-          let idx
-          while ((idx = buffer.indexOf('\n')) !== -1) {
-            const line = buffer.slice(0, idx)
-            buffer = buffer.slice(idx + 1)
-            if (line.trim().length === 0) continue
-            try {
-              handleMessage(JSON.parse(line) as WireMessage, conn, peerId)
-            } catch (err) {
-              // A malformed line from one peer must not take down a
-              // long-running desktop process — surface it and move on,
-              // instead of letting the exception escape this event handler.
-              emitError(err instanceof Error ? err : new Error(String(err)))
-            }
-          }
-        })
-
-        // Per-peer connection errors are transient (one flaky peer) and
-        // already recoverable — logged, not routed to onError, so the tray
-        // doesn't flip to a global error state over one peer's hiccup.
-        conn.on('error', (err: Error) => log(`[peer ${peerId}] connection error: ${err.message}`))
-        conn.on('close', () => {
-          log(`[peer ${peerId}] disconnected`)
-          tracker.peerDisconnected()
-        })
-
-        // Announce every manifest we know of for this course.
-        send(conn, planManifestsAnnouncement(knownManifests))
+        attachPeer(conn, b4a.toString(info.publicKey, 'hex').slice(0, 8))
       })
+
+      // Tier 1 (ADR-0006): same-LAN peers found via mDNS, connected to
+      // directly over plain TCP — a parallel path alongside the DHT join
+      // below (Tier 3), not a replacement for it.
+      lanDiscovery = createLanDiscovery({
+        topic,
+        onConnection: (socket) => attachPeer(socket, `lan-${++lanPeerCounter}`),
+        onError: (err) => log(`[lan-discovery] ${err.message}`)
+      })
+      await lanDiscovery.start()
 
       const discovery = swarm.join(topic, { server: true, client: true })
       try {
@@ -268,9 +293,29 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
         throw error
       }
       log(`\nJoined swarm topic for course "${courseId}". Waiting for peers...`)
+
+      // Tier 2 (ADR-0006): a second, narrower topic on the same swarm —
+      // Hyperswarm's 'connection' event fires per-connection regardless of
+      // which joined topic produced it, so the handler above already
+      // covers peers found this way too; nothing else to wire up.
+      if (region) {
+        const regionDiscovery = swarm.join(topicForCourseAndRegion(courseId, region), { server: true, client: true })
+        try {
+          await regionDiscovery.flushed()
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err))
+          emitError(error)
+          throw error
+        }
+        log(`Joined regional swarm topic "${region}" for course "${courseId}".`)
+      }
     },
 
     async stop (): Promise<void> {
+      if (lanDiscovery) {
+        await lanDiscovery.stop()
+        lanDiscovery = undefined
+      }
       if (!swarm) return
       await swarm.destroy()
       swarm = undefined
@@ -302,7 +347,7 @@ function parseArgs (argv: string[]): Opts {
 export async function run (argv: string[], paths: Paths): Promise<void> {
   const opts = parseArgs(argv)
   if (!opts.courseId) {
-    console.log('Usage: peer-node <courseId> --content-dir=<path> [--pubkey=<hex>] [--origin=<baseUrl>] [--max-store-bytes=<n>] [--seed=on|off|auto]')
+    console.log('Usage: peer-node <courseId> --content-dir=<path> [--pubkey=<hex>] [--origin=<baseUrl>] [--max-store-bytes=<n>] [--seed=on|off|auto] [--region=<tag>]')
     process.exit(1)
   }
   const courseId = opts.courseId
@@ -326,10 +371,11 @@ export async function run (argv: string[], paths: Paths): Promise<void> {
   console.log(`Origin:        ${opts.origin ? `${opts.origin} (timeout ${originTimeoutMs}ms)` : 'none configured'}`)
   console.log(`Storage cap:   ${maxStoreBytes ? `${maxStoreBytes} bytes` : 'unlimited'}`)
   console.log(`Seeding:       ${opts.seed === 'off' ? 'disabled (--seed=off)' : opts.seed === 'auto' ? 'auto (network-type detection, Windows only today)' : 'enabled'}`)
+  console.log(`Region (Tier 2): ${opts.region || 'none configured'}`)
 
   const node = createSwarmNode({
     courseId, contentDir, publicKeyHex, paths,
-    originFetcher, originTimeoutMs, maxStoreBytes, seedingPolicy
+    originFetcher, originTimeoutMs, maxStoreBytes, seedingPolicy, region: opts.region
   })
   node.onError((err) => console.error('Engine error:', err.message))
   await node.start()
