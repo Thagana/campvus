@@ -12,17 +12,19 @@
 
 import { Db } from '../db/client'
 import { account, invitation, member, organization, session, user, verification } from '../db/schema'
+import { buildOrganizationHooks } from './organization-hooks'
 import { buildSchoolRoles } from './roles'
 
 const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30
 
 export async function createAuth (db: Db, secret: string) {
-  const [{ betterAuth }, { drizzleAdapter }, { fromNodeHeaders }, { organization: organizationPlugin }, roles] = await Promise.all([
+  const [{ betterAuth }, { drizzleAdapter }, { fromNodeHeaders }, { organization: organizationPlugin }, roles, organizationHooks] = await Promise.all([
     import('better-auth'),
     import('better-auth/adapters/drizzle'),
     import('better-auth/node'),
     import('better-auth/plugins/organization'),
-    buildSchoolRoles()
+    buildSchoolRoles(),
+    buildOrganizationHooks(db)
   ])
 
   const auth = betterAuth({
@@ -43,7 +45,8 @@ export async function createAuth (db: Db, secret: string) {
         roles: { owner: roles.owner, teacher: roles.teacher, student: roles.student },
         // Schools are created only by the internal school-creation script
         // (auth/create-school.ts), never through self-service sign-up.
-        allowUserToCreateOrganization: false
+        allowUserToCreateOrganization: false,
+        organizationHooks
       })
     ]
   })

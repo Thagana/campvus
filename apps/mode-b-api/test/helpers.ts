@@ -6,6 +6,7 @@ import { FastifyInstance } from 'fastify'
 import { resolvePaths, Paths, generateAndSaveKeypair, loadKeypair } from '@campvus/engine'
 import { openDb, Db } from '../src/db/client'
 import { buildServer } from '../src/server'
+import { createSchool } from '../src/auth/create-school'
 
 export function tmpPaths (): Paths {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mode-b-api-test-'))
@@ -42,6 +43,52 @@ export async function registerUser (app: FastifyInstance, email: string, passwor
     payload: { email, password, name: email }
   })
   return sessionCookieHeader(res)
+}
+
+// Every School-scoped test needs a School with a signed-in Owner before it
+// can exercise anything else, so this is shared setup rather than per-file.
+export async function createSchoolWithOwner (
+  app: FastifyInstance,
+  db: Db,
+  { name, founderEmail }: { name: string, founderEmail: string }
+): Promise<{ organizationId: string, ownerCookie: string }> {
+  const { organizationId, invitationId } = await createSchool(db, { name, founderEmail })
+  const ownerCookie = await registerUser(app, founderEmail)
+  const accept = await app.inject({
+    method: 'POST',
+    url: '/api/auth/organization/accept-invitation',
+    headers: { cookie: ownerCookie, origin: 'http://localhost:80' },
+    payload: { invitationId }
+  })
+  if (accept.statusCode !== 200) throw new Error(`founding Owner failed to accept invitation: ${accept.body}`)
+  return { organizationId, ownerCookie }
+}
+
+// The invite-member -> sign-up -> accept-invitation triad, for tests that
+// just need a member of a given role in place and don't care about the
+// invite/accept mechanics themselves (those get their own dedicated tests).
+export async function inviteAndAccept (
+  app: FastifyInstance,
+  { organizationId, inviterCookie, email, role }: { organizationId: string, inviterCookie: string, email: string, role: string }
+): Promise<{ invitationId: string, cookie: string, member: { role: string } }> {
+  const invite = await app.inject({
+    method: 'POST',
+    url: '/api/auth/organization/invite-member',
+    headers: { cookie: inviterCookie, origin: 'http://localhost:80' },
+    payload: { email, role, organizationId }
+  })
+  if (invite.statusCode !== 200) throw new Error(`invite to ${email} as ${role} failed: ${invite.body}`)
+
+  const cookie = await registerUser(app, email)
+  const invitationId = invite.json().id
+  const accept = await app.inject({
+    method: 'POST',
+    url: '/api/auth/organization/accept-invitation',
+    headers: { cookie, origin: 'http://localhost:80' },
+    payload: { invitationId }
+  })
+  if (accept.statusCode !== 200) throw new Error(`${email} failed to accept invitation: ${accept.body}`)
+  return { invitationId, cookie, member: accept.json().member }
 }
 
 export function multipartBody (
