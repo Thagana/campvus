@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createTestApp, createSchoolWithOwner, inviteAndAccept, registerUser } from './helpers'
+import { createTestApp, createSchoolWithOwner, inviteAndAccept, registerUser, withBrevoStandIn } from './helpers'
+import { WEB_URL } from '../src/config'
 
 test('a Teacher can invite another Teacher by email; that person can accept and their role is teacher', async () => {
   const { app, db } = await createTestApp()
@@ -36,6 +37,29 @@ test('a Teacher can invite another Teacher by email; that person can accept and 
   })
   assert.equal(accept.statusCode, 200)
   assert.equal(accept.json().member.role, 'teacher')
+})
+
+test('inviting someone sends them a real invitation email with the accept-invite link', async () => {
+  const { app, db } = await createTestApp()
+  // createSchoolWithOwner registers the Owner (sends a verification email)
+  // before we start capturing — done outside withBrevoStandIn so only the
+  // invite-member email below lands in its capture, not both.
+  const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+
+  await withBrevoStandIn(async (received) => {
+    const invite = await app.inject({
+      method: 'POST',
+      url: '/api/auth/organization/invite-member',
+      headers: { cookie: ownerCookie, origin: 'http://localhost:80' },
+      payload: { email: 'colleague@riverside.edu', role: 'teacher', organizationId }
+    })
+    assert.equal(invite.statusCode, 200)
+
+    const emails = received()
+    assert.equal(emails.length, 1)
+    assert.equal(emails[0].to, 'colleague@riverside.edu')
+    assert.match(emails[0].html, new RegExp(`${WEB_URL}/accept-invite\\?id=${invite.json().id}`))
+  })
 })
 
 test('a Teacher can invite a Student by email; that person can accept and their role is student', async () => {

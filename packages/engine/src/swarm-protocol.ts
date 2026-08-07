@@ -47,20 +47,25 @@ export function planManifestsAnnouncement (knownManifests: Map<string, SignedMan
 // Merges verified, in-course manifests from an incoming `manifests` message
 // into `knownManifests` (mutated in place — it's the peer's running session
 // state, analogous to a small in-memory database), then decides what's
-// still missing locally.
+// still missing locally. `courseIds` is a list, not a single value — a node
+// can be enrolled in (and gossiping about) several courses at once, and a
+// peer's announcement (planManifestsAnnouncement) always includes every
+// course it knows about, not just ones we happen to share, so this is what
+// narrows an incoming message down to the ones we actually care about.
 export function applyManifestsMessage (args: {
   msg: ManifestsMessage
-  courseId: string
+  courseIds: string[]
   publicKeyHex: string
   knownManifests: Map<string, SignedManifest>
   localHashes: Set<string>
 }): ApplyManifestsResult {
-  const { msg, courseId, publicKeyHex, knownManifests, localHashes } = args
+  const { msg, courseIds, publicKeyHex, knownManifests, localHashes } = args
+  const courseIdSet = new Set(courseIds)
   const learned: SignedManifest[] = []
   const rejected: RejectedManifest[] = []
 
   for (const m of msg.items) {
-    if (m.courseId !== courseId) continue
+    if (!courseIdSet.has(m.courseId)) continue
     if (knownManifests.has(m.hash)) continue
     if (!verifyManifest(m, publicKeyHex)) {
       rejected.push({ filename: m.filename, reason: 'invalid-signature' })

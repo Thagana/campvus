@@ -6,7 +6,8 @@ import type { AppState } from '../src/preload-api'
 const baseState: AppState = {
   status: 'idle',
   peerCount: 0,
-  seedingAllowed: true
+  seedingAllowed: true,
+  configured: true
 }
 
 test('idle state with no peers', () => {

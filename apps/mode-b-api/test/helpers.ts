@@ -2,6 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
+import http from 'http'
+import type { AddressInfo } from 'net'
 import { FastifyInstance } from 'fastify'
 import { resolvePaths, Paths, generateAndSaveKeypair, loadKeypair } from '@campvus/engine'
 import { openDb, Db } from '../src/db/client'
@@ -89,6 +91,48 @@ export async function inviteAndAccept (
   })
   if (accept.statusCode !== 200) throw new Error(`${email} failed to accept invitation: ${accept.body}`)
   return { invitationId, cookie, member: accept.json().member }
+}
+
+export interface ReceivedEmail { to: string, subject: string, html: string }
+
+// Stands in for Brevo's real send-email endpoint so tests can assert an
+// invitation/reset/verification email was actually sent, without ever
+// calling the real Brevo API — same "spin up a real local server" seam
+// origin.test.ts (packages/engine) uses for httpOriginFetcher, rather than
+// mocking fetch itself. BREVO_API_URL is a test-only override (src/email/brevo.ts).
+export async function withBrevoStandIn (
+  fn: (received: () => ReceivedEmail[]) => Promise<void>
+): Promise<void> {
+  const received: ReceivedEmail[] = []
+  const server = http.createServer((req, res) => {
+    const chunks: Buffer[] = []
+    req.on('data', (chunk) => chunks.push(chunk))
+    req.on('end', () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      received.push({ to: body.to[0].email, subject: body.subject, html: body.htmlContent })
+      res.writeHead(201, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ messageId: 'test' }))
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, resolve))
+  const port = (server.address() as AddressInfo).port
+  const prevUrl = process.env.BREVO_API_URL
+  const prevKey = process.env.BREVO_API_KEY
+  process.env.BREVO_API_URL = `http://127.0.0.1:${port}`
+  process.env.BREVO_API_KEY = 'test-key'
+  try {
+    await fn(() => received)
+  } finally {
+    // `process.env.X = undefined` coerces to the *string* "undefined"
+    // (env vars are always strings) rather than actually unsetting it —
+    // that string is truthy, so a later test reading it back would wrongly
+    // conclude Brevo is configured. delete when there was no prior value.
+    if (prevUrl === undefined) delete process.env.BREVO_API_URL
+    else process.env.BREVO_API_URL = prevUrl
+    if (prevKey === undefined) delete process.env.BREVO_API_KEY
+    else process.env.BREVO_API_KEY = prevKey
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
 }
 
 export function multipartBody (

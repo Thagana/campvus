@@ -33,7 +33,7 @@ test('applyManifestsMessage learns new verified manifests and requests missing c
 
   const result = applyManifestsMessage({
     msg: { type: 'manifests', items: [manifest] },
-    courseId: 'COMSCI214',
+    courseIds: ['COMSCI214'],
     publicKeyHex: hex(keypair.publicKey),
     knownManifests,
     localHashes
@@ -53,7 +53,7 @@ test('applyManifestsMessage ignores manifests for other courses', () => {
 
   const result = applyManifestsMessage({
     msg: { type: 'manifests', items: [manifest] },
-    courseId: 'COMSCI214',
+    courseIds: ['COMSCI214'],
     publicKeyHex: hex(keypair.publicKey),
     knownManifests,
     localHashes
@@ -61,6 +61,28 @@ test('applyManifestsMessage ignores manifests for other courses', () => {
 
   assert.equal(result.learned.length, 0)
   assert.equal(knownManifests.size, 0)
+})
+
+test('applyManifestsMessage accepts a manifest matching any of several enrolled courses', () => {
+  const keypair = nacl.sign.keyPair()
+  const comsciManifest = makeManifest(keypair, { courseId: 'COMSCI214' })
+  const mathManifest = makeManifest(keypair, { courseId: 'MATH101', hash: hashBuffer(Buffer.from('other content')) })
+  const historyManifest = makeManifest(keypair, { courseId: 'HIST101', hash: hashBuffer(Buffer.from('yet more content')) })
+  const knownManifests = new Map<string, SignedManifest>()
+  const localHashes = new Set<string>()
+
+  const result = applyManifestsMessage({
+    msg: { type: 'manifests', items: [comsciManifest, mathManifest, historyManifest] },
+    courseIds: ['COMSCI214', 'MATH101'],
+    publicKeyHex: hex(keypair.publicKey),
+    knownManifests,
+    localHashes
+  })
+
+  assert.equal(result.learned.length, 2)
+  assert.equal(knownManifests.has(comsciManifest.hash), true)
+  assert.equal(knownManifests.has(mathManifest.hash), true)
+  assert.equal(knownManifests.has(historyManifest.hash), false)
 })
 
 test('applyManifestsMessage rejects manifests with an invalid signature', () => {
@@ -72,7 +94,7 @@ test('applyManifestsMessage rejects manifests with an invalid signature', () => 
 
   const result = applyManifestsMessage({
     msg: { type: 'manifests', items: [manifest] },
-    courseId: 'COMSCI214',
+    courseIds: ['COMSCI214'],
     publicKeyHex: hex(keypair.publicKey),
     knownManifests,
     localHashes
@@ -91,7 +113,7 @@ test('applyManifestsMessage does not re-request content already on disk', () => 
 
   const result = applyManifestsMessage({
     msg: { type: 'manifests', items: [manifest] },
-    courseId: 'COMSCI214',
+    courseIds: ['COMSCI214'],
     publicKeyHex: hex(keypair.publicKey),
     knownManifests,
     localHashes

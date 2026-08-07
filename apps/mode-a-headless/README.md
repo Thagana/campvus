@@ -82,10 +82,27 @@ pnpm install
 npx tsx src/peer-node.ts COMSCI214 --content-dir=./incoming --pubkey=<paste public key hex here>
 ```
 
+`<courseId>` is actually `<courseIds>` — a student is normally enrolled in
+several courses at once, so `peer-node` takes a comma-separated list (e.g.
+`npx tsx src/peer-node.ts COMSCI214,MATH101 --content-dir=./incoming
+--pubkey=...`) and joins one swarm topic per course, tracking all their
+manifests in the same run.
+
 Extra flags on `peer-node`, all optional:
 
 - `--origin=<baseUrl>` — fall back to `GET <baseUrl>/<hash>` if no peer
   delivers the file within `--origin-timeout-ms` (default 15000).
+- `--manifest-origin=<baseUrl>` — the manifest-sync bridge (§9): fetches
+  `GET <baseUrl>/courses/<courseId>/manifests` once per enrolled course on
+  start, runs each course's list through the same signature-verified diff
+  as peer gossip, and schedules origin-fallback fetches (via `--origin`, if
+  also set) for anything it learns about that isn't local yet. This is what
+  lets a node with zero reachable peers catch up on manifests published
+  while offline — origin fallback alone only ever fetched bytes by hash,
+  never the list of what exists. Separate base URL from `--origin` since a
+  real origin (e.g. `apps/mode-b-api`) serves these from different routes.
+- `--manifest-sync-interval-ms=<n>` — repeat the manifest-origin check on
+  this interval instead of only once at start.
 - `--max-store-bytes=<n>` — cap local storage; evicts the least-recently-accessed
   content first once exceeded.
 - `--seed=off` — stop responding to other peers' requests (default: seed
@@ -123,7 +140,14 @@ cluster, not same LAN) and Tier 3 (wide DHT) behave the same way.
   and is enforced; the actual network-type decision is a manual
   `--seed=on|off` flag, not real detection — see `@campvus/engine`'s
   `seeding-policy.ts`)
-- Real tiered discovery (LAN → local cluster → wide DHT) — Hyperswarm has
-  no API for this (confirmed from its own docs); real tiers would need a
-  separate mechanism (UDP broadcast/mDNS) alongside it. What exists today
-  is peer-request dedup (see above), not real tiering.
+- A real credential for `--origin`/`--manifest-origin` against a live
+  `apps/mode-b-api` server — both flags make plain unauthenticated
+  requests today, but Mode B's matching routes are session-cookie-gated,
+  so pointing them at a live Mode B instance doesn't work yet
+  (docs/ARCHITECTURE.md Open Question #9(a)).
+
+Real tiered discovery (LAN via mDNS → local cluster via a region-scoped
+topic → wide DHT) and the manifest-sync bridge (`--manifest-origin`,
+above) are both built now — see docs/ARCHITECTURE.md §8/§13.1 and §9 for
+the up-to-date status; this README only tracks what's specific to the
+CLI shim here.

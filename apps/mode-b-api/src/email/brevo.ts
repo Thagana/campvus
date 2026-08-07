@@ -6,7 +6,7 @@
 // ensureAuthSecret (paths.ts): a fresh checkout can still sign up and
 // reset passwords locally before a real provider is wired up.
 
-const BREVO_SEND_EMAIL_URL = 'https://api.brevo.com/v3/smtp/email'
+const DEFAULT_BREVO_SEND_EMAIL_URL = 'https://api.brevo.com/v3/smtp/email'
 
 export interface SendEmailInput {
   to: string
@@ -22,7 +22,10 @@ export async function sendEmail (input: SendEmailInput): Promise<void> {
     return
   }
 
-  const res = await fetch(BREVO_SEND_EMAIL_URL, {
+  // Read fresh (not a module-level const) so tests can point this at a
+  // local stand-in server via BREVO_API_URL, same reasoning as apiKey above.
+  const url = process.env.BREVO_API_URL || DEFAULT_BREVO_SEND_EMAIL_URL
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'api-key': apiKey,

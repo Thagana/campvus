@@ -10,7 +10,9 @@ const api: CampvusApi = {
     const listener = (_event: IpcRendererEvent, state: AppState): void => handler(state)
     ipcRenderer.on('campvus:state-changed', listener)
     return () => ipcRenderer.removeListener('campvus:state-changed', listener)
-  }
+  },
+  getConfig: () => ipcRenderer.invoke('campvus:get-config'),
+  saveConfig: (config) => ipcRenderer.invoke('campvus:save-config', config)
 }
 
 contextBridge.exposeInMainWorld('campvus', api)

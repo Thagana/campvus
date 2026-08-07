@@ -1,13 +1,14 @@
 import { app, BrowserWindow, Tray, nativeImage, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
-import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, SwarmNode } from '@campvus/engine';
+import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher, SwarmNode } from '@campvus/engine';
 import { createAgent, AgentEngineEvents, Agent } from './agent';
 import { createWindowController } from './window-controller';
 import { selectDesktopSeedingPolicy } from './seeding-policy-selection';
 import { configureAutoLaunch } from './auto-launch';
 import { getPaths } from './paths';
-import type { AppState } from './preload-api';
+import { loadConfigFile, saveConfigFile, mergeConfig, validateConfig, DesktopConfig, PartialDesktopConfig } from './config-store';
+import type { AppState, SaveConfigResult } from './preload-api';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -22,17 +23,32 @@ const seedingPolicy = selectDesktopSeedingPolicy({
   alwaysAllow: alwaysAllowSeeding,
 });
 
-// Neither courseId nor the institution's public key have a UI or config
-// file yet (ADR/#engine-events follow-up) — for now they're supplied via
-// env vars, same information the CLI shim (apps/mode-a-headless) takes as
-// argv. Origin fallback is optional, same as the CLI's --origin flag.
-const courseId = process.env.CAMPVUS_COURSE_ID ?? 'COMSCI214';
-const institutionPublicKeyHex = process.env.CAMPVUS_INSTITUTION_PUBLIC_KEY;
-const originUrl = process.env.CAMPVUS_ORIGIN_URL;
-const maxStoreBytes = process.env.CAMPVUS_MAX_STORE_BYTES ? Number(process.env.CAMPVUS_MAX_STORE_BYTES) : undefined;
-// Tier 2 (local cluster, ADR-0006) — same CAMPVUS_REGION convention as
-// peer-node.ts's --region flag. Unset means Tier 2 is simply not joined.
-const region = process.env.CAMPVUS_REGION;
+// Gap #12 (docs/TODO.md): env vars alone left a misconfigured install
+// silently stuck with no way to fix it short of relaunching with different
+// env vars. Env vars are still read here, but only as first-run defaults —
+// config-store.ts persists whatever's actually in effect to disk, and the
+// window's Settings panel can change it (and restart the engine) without
+// relaunching the app at all.
+// A student is normally enrolled in several courses at once — comma
+// separated, same convention as the CLI shim's positional <courseIds> arg.
+const envCourseIds = process.env.CAMPVUS_COURSE_IDS
+  ?.split(',').map((id) => id.trim()).filter((id) => id.length > 0);
+
+const envDefaults: PartialDesktopConfig = {
+  courseIds: envCourseIds && envCourseIds.length > 0 ? envCourseIds : undefined,
+  institutionPublicKeyHex: process.env.CAMPVUS_INSTITUTION_PUBLIC_KEY,
+  originUrl: process.env.CAMPVUS_ORIGIN_URL,
+  manifestOriginUrl: process.env.CAMPVUS_MANIFEST_ORIGIN_URL,
+  region: process.env.CAMPVUS_REGION,
+  maxStoreBytes: process.env.CAMPVUS_MAX_STORE_BYTES ? Number(process.env.CAMPVUS_MAX_STORE_BYTES) : undefined,
+};
+
+// §5.5's "opportunistically on Wi-Fi + charging" periodic check-in,
+// approximated here as a fixed interval — the desktop app is long-running
+// (unlike the CLI shim, which only syncs once per invocation), so a
+// configured manifest origin gets a real periodic re-check, not just a
+// one-shot at launch.
+const MANIFEST_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 // Surfaces "not configured yet" as the same tray error state a real engine
 // error would produce, instead of leaving the agent stuck on a misleading
@@ -47,26 +63,62 @@ function unconfiguredEngineEvents (message: string): AgentEngineEvents {
 }
 
 const paths = getPaths();
+const configFile = path.join(paths.rootDir, 'desktop-config.json');
+
 let swarmNode: SwarmNode | undefined;
 let agent: Agent;
+let currentConfig: DesktopConfig;
 
-if (institutionPublicKeyHex) {
-  swarmNode = createSwarmNode({
-    courseId,
-    contentDir: paths.contentStoreDir,
-    publicKeyHex: institutionPublicKeyHex,
-    paths,
-    originFetcher: originUrl ? httpOriginFetcher(originUrl) : undefined,
-    maxStoreBytes,
-    seedingPolicy,
-    region,
+function wireAgent (nextAgent: Agent): void {
+  agent = nextAgent;
+  agent.onStateChange(() => {
+    refreshTray();
+    windowContents?.send('campvus:state-changed', getAppState());
   });
-  agent = createAgent(swarmNode);
-} else {
-  agent = createAgent(unconfiguredEngineEvents(
-    'Set CAMPVUS_INSTITUTION_PUBLIC_KEY to the institution public key before syncing can start.'
-  ));
 }
+
+// Builds the swarm node (or the unconfigured stand-in) for a given config
+// without starting any networking — kept separate from starting so the
+// original ADR-0003 timing holds: the node is constructed eagerly at module
+// load, but .start() is still deferred to app.on('ready').
+function configureEngine (config: DesktopConfig): void {
+  currentConfig = config;
+  if (config.institutionPublicKeyHex) {
+    swarmNode = createSwarmNode({
+      courseIds: config.courseIds,
+      contentDir: paths.contentStoreDir,
+      publicKeyHex: config.institutionPublicKeyHex,
+      paths,
+      originFetcher: config.originUrl ? httpOriginFetcher(config.originUrl) : undefined,
+      manifestListFetcher: config.manifestOriginUrl ? httpManifestListFetcher(config.manifestOriginUrl) : undefined,
+      manifestSyncIntervalMs: config.manifestOriginUrl ? MANIFEST_SYNC_INTERVAL_MS : undefined,
+      maxStoreBytes: config.maxStoreBytes,
+      seedingPolicy,
+      region: config.region,
+    });
+    wireAgent(createAgent(swarmNode));
+  } else {
+    swarmNode = undefined;
+    wireAgent(createAgent(unconfiguredEngineEvents(
+      'Open Settings and enter the institution public key before syncing can start.'
+    )));
+  }
+}
+
+// Called whenever Settings saves a new config after the app is already
+// running — stops whatever's currently syncing, reconfigures, and starts
+// the new engine immediately (unlike the initial boot path, there's no
+// app.on('ready') left to wait for).
+async function restartEngine (config: DesktopConfig): Promise<void> {
+  if (swarmNode) await swarmNode.stop();
+  configureEngine(config);
+  if (swarmNode) await swarmNode.start();
+}
+
+// Built at module load so the tray/window can read agent state immediately
+// (mirrors the original eager createSwarmNode() call this replaces) — only
+// .start() waits for app.on('ready'), same as before.
+configureEngine(mergeConfig(envDefaults, loadConfigFile(configFile)));
 
 function getAppState (): AppState {
   const state = agent.getState();
@@ -75,10 +127,21 @@ function getAppState (): AppState {
     peerCount: state.peerCount,
     errorMessage: state.errorMessage,
     seedingAllowed: seedingPolicy.isSeedingAllowed(),
+    configured: Boolean(currentConfig?.institutionPublicKeyHex),
   };
 }
 
 ipcMain.handle('campvus:get-state', () => getAppState());
+ipcMain.handle('campvus:get-config', () => currentConfig);
+ipcMain.handle('campvus:save-config', async (_event, config: PartialDesktopConfig): Promise<SaveConfigResult> => {
+  const merged: PartialDesktopConfig = { ...currentConfig, ...config };
+  const errors = validateConfig(merged);
+  if (errors.length > 0) return { ok: false, errors };
+
+  saveConfigFile(configFile, merged);
+  await restartEngine(merged as DesktopConfig);
+  return { ok: true };
+});
 
 // Matches @campvus/design's --text-muted / --accent / --danger tokens, so
 // the tray dot reads as the same status color as the in-window status dot.
@@ -217,11 +280,6 @@ function refreshTray (): void {
   tray.setImage(trayIcon(description.status));
   tray.setToolTip(description.tooltip);
 }
-
-agent.onStateChange(() => {
-  refreshTray();
-  windowContents?.send('campvus:state-changed', getAppState());
-});
 
 // ADR-0003: no BrowserWindow is created at launch — only a tray icon.
 // The window is created lazily, on the first tray click, via

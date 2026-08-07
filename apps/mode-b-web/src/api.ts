@@ -24,7 +24,13 @@ export interface UploadResult {
   deduped: boolean
 }
 
-class ApiError extends Error {}
+export class ApiError extends Error {
+  status: number
+  constructor (message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
 
 async function request<T> (path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -34,7 +40,7 @@ async function request<T> (path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.error || `request failed with status ${res.status}`)
+    throw new ApiError(body.error || `request failed with status ${res.status}`, res.status)
   }
   return res.json() as Promise<T>
 }
@@ -72,7 +78,35 @@ export async function uploadManifest (courseId: string, file: File): Promise<Upl
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.error || `upload failed with status ${res.status}`)
+    throw new ApiError(body.error || `upload failed with status ${res.status}`, res.status)
   }
   return res.json() as Promise<UploadResult>
+}
+
+// Platform-admin routes (apps/mode-b-api/src/routes/admin.ts) — a separate
+// axis from School membership (auth/platform-admin.ts's CAMPVUS_ADMIN_EMAILS
+// allowlist), not an organization role.
+export interface School {
+  id: string
+  name: string
+  slug: string
+}
+
+export function listSchools (): Promise<School[]> {
+  return request('/admin/schools')
+}
+
+export function createSchool (name: string, founderEmail: string): Promise<{ organizationId: string, invitationId: string }> {
+  return request('/admin/schools', { method: 'POST', body: JSON.stringify({ name, founderEmail }) })
+}
+
+// better-auth's own organization plugin endpoint — no client-side plugin
+// wired up for it (auth-client.ts), so called through the same fetch
+// wrapper as everything else here rather than adding that dependency for
+// one call.
+export function acceptInvitation (invitationId: string): Promise<{ member: { id: string, role: string } }> {
+  return request('/api/auth/organization/accept-invitation', {
+    method: 'POST',
+    body: JSON.stringify({ invitationId })
+  })
 }

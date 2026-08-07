@@ -25,6 +25,10 @@ export function httpManifestListFetcher (baseUrl: string): FetchManifestList {
   }
 }
 
+// Single-course by design, matching the real origin API's shape
+// (`GET /courses/:courseId/manifests` is scoped to one course) — a
+// multi-course node (swarm-node.ts's checkOriginForManifests) calls this
+// once per enrolled course rather than this function fetching several.
 export async function syncManifestsFromOrigin (args: {
   courseId: string
   publicKeyHex: string
@@ -35,7 +39,7 @@ export async function syncManifestsFromOrigin (args: {
   const items = await args.fetchManifestList(args.courseId)
   return applyManifestsMessage({
     msg: { type: 'manifests', items },
-    courseId: args.courseId,
+    courseIds: [args.courseId],
     publicKeyHex: args.publicKeyHex,
     knownManifests: args.knownManifests,
     localHashes: args.localHashes

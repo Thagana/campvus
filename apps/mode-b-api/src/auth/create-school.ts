@@ -19,26 +19,28 @@ function slugify (name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '')
 }
 
-// The only way a School comes into existence (ADR-0005) — no HTTP route, no
-// self-serve path (see allowUserToCreateOrganization: false in auth.ts).
-// Inserts the Organization and its founding Owner Invitation directly via
-// Drizzle rather than better-auth's own create-organization/invite-member
-// endpoints, which require an authenticated inviter that doesn't exist yet
-// for a brand-new School. The founding Teacher completes onboarding through
-// the ordinary sign-up-then-accept-invitation flow like any other invitee.
+// The only way a School comes into existence (ADR-0005) — no self-serve path
+// (see allowUserToCreateOrganization: false in auth.ts). Called from
+// routes/admin.ts (platform-admin only, see auth/platform-admin.ts), never
+// directly reachable by a regular account. Inserts the Organization and its
+// founding Owner Invitation directly via Drizzle rather than better-auth's
+// own create-organization/invite-member endpoints, which require an
+// authenticated inviter that doesn't exist yet for a brand-new School. The
+// founding Teacher completes onboarding through the ordinary
+// sign-up-then-accept-invitation flow like any other invitee — routes/admin.ts
+// sends them the same invitation email a regular invite-member call would.
 //
 // inviterId is left null (see schema.ts) since there's no real inviter yet.
 // One consequence: better-auth's GET /organization/get-invitation (look up
 // one invitation by id) dereferences inviterId to a member row and 400s
 // when it can't resolve one — that endpoint doesn't work for this specific
-// invitation. (GET /organization/list-user-invitations has no such
-// dependency, but isn't a substitute today regardless: it unconditionally
-// requires session.user.emailVerified, and this app has no email
-// verification flow at all yet, so that endpoint 403s for every account,
-// not just this one — a separate, pre-existing gap, not introduced here.)
-// For now the founding Teacher learns their invitation id out-of-band, from
-// the school-creation script's own printed output — there's no self-serve
-// "list my invitations" path until email verification exists.
+// invitation. This is fine: invite acceptance in this app is purely
+// link-based (the emailed accept-invite URL already carries the
+// invitationId), so no code path ever needs to look an invitation up by id
+// server-side outside of accept-invitation itself. GET
+// /organization/list-user-invitations is deliberately left unused for the
+// same reason — it hard-requires session.user.emailVerified, which this app
+// never gates anything else on, and the direct-link flow doesn't need it.
 export async function createSchool (db: Db, input: CreateSchoolInput): Promise<CreateSchoolResult> {
   const organizationId = crypto.randomUUID()
   const invitationId = crypto.randomUUID()

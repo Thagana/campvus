@@ -8,27 +8,69 @@
     <main class="app">
       <header class="app-header">
         <span class="eyebrow">Campvus</span>
-        <span class="status-dot" id="status-dot" data-status="idle"></span>
+        <span class="header-actions">
+          <span class="status-dot" id="status-dot" data-status="idle"></span>
+          <button type="button" class="btn-ghost settings-toggle" id="settings-toggle">Settings</button>
+        </span>
       </header>
 
-      <section class="card status-card">
-        <h1 id="status-label">Idle</h1>
-        <p class="muted" id="status-detail">0 peers connected</p>
+      <section id="status-section">
+        <section class="card status-card">
+          <h1 id="status-label">Idle</h1>
+          <p class="muted" id="status-detail">0 peers connected</p>
+        </section>
+
+        <section class="error-banner" id="error-banner" hidden>
+          <span id="error-message"></span>
+        </section>
+
+        <section class="detail-list">
+          <div class="detail-row">
+            <span class="muted">Peers connected</span>
+            <span class="detail-value" id="peer-count">0</span>
+          </div>
+          <div class="detail-row">
+            <span class="muted">Seeding</span>
+            <span class="detail-value" id="seeding-value">Allowed</span>
+          </div>
+        </section>
       </section>
 
-      <section class="error-banner" id="error-banner" hidden>
-        <span id="error-message"></span>
-      </section>
+      <section class="card settings-card" id="settings-section" hidden>
+        <h2>Settings</h2>
+        <form id="settings-form">
+          <label>
+            Course IDs <span class="muted">(comma-separated — you're usually enrolled in more than one)</span>
+            <input type="text" id="field-courseIds" name="courseIds" placeholder="COMSCI214, MATH101" required />
+          </label>
+          <label>
+            Institution public key (hex)
+            <input type="text" id="field-institutionPublicKeyHex" name="institutionPublicKeyHex" class="mono" required />
+          </label>
+          <label>
+            Origin URL <span class="muted">(optional)</span>
+            <input type="text" id="field-originUrl" name="originUrl" placeholder="https://lms.example.edu" />
+          </label>
+          <label>
+            Manifest origin URL <span class="muted">(optional — catches up on manifests published while offline)</span>
+            <input type="text" id="field-manifestOriginUrl" name="manifestOriginUrl" placeholder="https://lms.example.edu" />
+          </label>
+          <label>
+            Region <span class="muted">(optional, Tier 2)</span>
+            <input type="text" id="field-region" name="region" placeholder="e.g. campus-west" />
+          </label>
+          <label>
+            Max store size in bytes <span class="muted">(optional)</span>
+            <input type="text" id="field-maxStoreBytes" name="maxStoreBytes" placeholder="e.g. 5000000000" />
+          </label>
 
-      <section class="detail-list">
-        <div class="detail-row">
-          <span class="muted">Peers connected</span>
-          <span class="detail-value" id="peer-count">0</span>
-        </div>
-        <div class="detail-row">
-          <span class="muted">Seeding</span>
-          <span class="detail-value" id="seeding-value">Allowed</span>
-        </div>
+          <p class="error" id="settings-error" hidden></p>
+
+          <div class="row">
+            <button type="submit" class="btn btn-primary" id="settings-save">Save</button>
+            <button type="button" class="btn btn-secondary" id="settings-cancel">Cancel</button>
+          </div>
+        </form>
       </section>
     </main>
     <script type="module" src="/src/renderer.ts"></script>

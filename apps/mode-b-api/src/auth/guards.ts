@@ -11,6 +11,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { Db } from '../db/client'
 import { courses, enrollments, member } from '../db/schema'
 import { STAFF_ROLES } from './school-roles'
+import { isPlatformAdmin } from './platform-admin'
 import { AuthBundle } from './auth'
 
 export interface SessionUser {
@@ -38,6 +39,18 @@ export function requireAuth (request: FastifyRequest, reply: FastifyReply): Sess
     return null
   }
   return request.user
+}
+
+// Platform-admin (routes/admin.ts) is a separate axis from School
+// membership entirely — an admin doesn't need to belong to any School.
+export function requirePlatformAdmin (request: FastifyRequest, reply: FastifyReply): SessionUser | null {
+  const user = requireAuth(request, reply)
+  if (!user) return null
+  if (!isPlatformAdmin(user.email)) {
+    reply.code(403).send({ error: 'platform admin access required' })
+    return null
+  }
+  return user
 }
 
 export interface SchoolMembership {

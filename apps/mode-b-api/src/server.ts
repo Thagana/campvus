@@ -11,6 +11,7 @@ import { registerAuthRoutes } from './routes/auth'
 import { registerCourseRoutes } from './routes/courses'
 import { registerManifestRoutes } from './routes/manifests'
 import { registerContentRoutes } from './routes/content'
+import { registerAdminRoutes } from './routes/admin'
 
 export interface ServerDeps {
   db: Db
@@ -40,6 +41,7 @@ export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
   registerCourseRoutes(app, deps.db)
   registerManifestRoutes(app, deps.db, deps.paths, deps.keypair)
   registerContentRoutes(app, deps.db, deps.paths)
+  registerAdminRoutes(app, deps.db)
 
   // Serves apps/mode-b-web's built assets once `npm run build` has been run
   // there. In dev, use Vite's own dev server instead — it proxies API
@@ -48,6 +50,20 @@ export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
   // doesn't fail to boot.
   if (fs.existsSync(WEB_DIST)) {
     await app.register(staticPlugin, { root: WEB_DIST })
+
+    // mode-b-web has no server-rendered routing — every real page (e.g.
+    // /accept-invite) is client-side only. @fastify/static above only ever
+    // serves an actual file on disk, so a fresh browser navigation straight
+    // to /accept-invite (not a client-side transition) 404s without this:
+    // fall back to index.html for any GET that isn't a known API prefix,
+    // letting the SPA's own routing take over from there.
+    const API_PREFIXES = ['/api/', '/courses', '/content', '/admin', '/healthz']
+    app.setNotFoundHandler((request, reply) => {
+      if (request.method === 'GET' && !API_PREFIXES.some((prefix) => request.url.startsWith(prefix))) {
+        return reply.sendFile('index.html')
+      }
+      return reply.code(404).send({ error: 'not found' })
+    })
   }
 
   return app

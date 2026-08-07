@@ -13,18 +13,12 @@
 import { Db } from '../db/client'
 import { account, invitation, member, organization, session, user, verification } from '../db/schema'
 import { sendEmail } from '../email/brevo'
+import { sendInvitationEmail } from '../email/invitation-email'
+import { WEB_URL } from '../config'
 import { buildOrganizationHooks } from './organization-hooks'
 import { buildSchoolRoles } from './roles'
 
 const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30
-
-// No email provider is wired up yet, so an invite's accept link is printed
-// to the server console instead of sent — same "no operator setup step"
-// reasoning as ensureAuthSecret (paths.ts). The inviter reads it from stdout
-// and passes it on to the invitee out-of-band. WEB_URL matches the origin
-// entry in trustedOrigins below; the /accept-invite route it points at
-// doesn't exist in mode-b-web yet — that's a separate, later piece of work.
-const WEB_URL = process.env.WEB_URL || 'http://localhost:5173'
 
 export async function createAuth (db: Db, secret: string) {
   const [{ betterAuth }, { drizzleAdapter }, { fromNodeHeaders }, { organization: organizationPlugin }, roles, organizationHooks] = await Promise.all([
@@ -44,6 +38,7 @@ export async function createAuth (db: Db, secret: string) {
     }),
     emailAndPassword: {
       enabled: true,
+      requireEmailVerification: true,
       sendResetPassword: async ({ user, url }) => {
         await sendEmail({
           to: user.email,
@@ -52,13 +47,15 @@ export async function createAuth (db: Db, secret: string) {
         })
       }
     },
-    // sendOnSignUp fires the verification email right after sign-up, but
-    // (unlike emailAndPassword.requireEmailVerification) doesn't gate
-    // sign-in on it — this app has no verified-email requirement yet (see
-    // create-school.ts's list-user-invitations note), so verification stays
-    // informational for now rather than blocking.
+    // requireEmailVerification means sign-up no longer returns a session —
+    // it creates the user, sends this verification email, and the client
+    // has to wait for it. autoSignInAfterVerification signs the user in the
+    // moment they click the emailed link (that GET lands on this API
+    // server's own origin, same-origin with the web app per vite.config.ts,
+    // so the session cookie it sets is usable immediately after).
     emailVerification: {
       sendOnSignUp: true,
+      autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
         await sendEmail({
           to: user.email,
@@ -79,7 +76,7 @@ export async function createAuth (db: Db, secret: string) {
     // better-auth folds BETTER_AUTH_URL/BETTER_AUTH_TRUSTED_ORIGINS env vars
     // into this list on its own, so set BETTER_AUTH_URL to the deployed
     // origin there instead of hardcoding it here.
-    trustedOrigins: ['http://localhost:5173'],
+    trustedOrigins: [WEB_URL],
     plugins: [
       organizationPlugin({
         ac: roles.ac,
@@ -89,9 +86,12 @@ export async function createAuth (db: Db, secret: string) {
         allowUserToCreateOrganization: false,
         organizationHooks,
         sendInvitationEmail: async (data) => {
-          const url = `${WEB_URL}/accept-invite?id=${data.id}`
-          console.log(`Invitation for ${data.email} to join "${data.organization.name}" as ${data.role}:`)
-          console.log(`  ${url}`)
+          await sendInvitationEmail({
+            to: data.email,
+            schoolName: data.organization.name,
+            role: data.role,
+            invitationId: data.id
+          })
         }
       })
     ]
