@@ -4,9 +4,9 @@
   "private": true,
   "description": "Mode B: the full-app backend — direct-upload API, auth/enrollment, and origin storage. We deploy this infra ourselves instead of watching an LMS.",
   "scripts": {
-    "start": "tsx src/index.ts",
-    "dev": "tsx src/index.ts",
-    "create-school": "tsx src/scripts/create-school.ts",
+    "start": "tsx --env-file-if-exists=.env src/index.ts",
+    "dev": "tsx --env-file-if-exists=.env src/index.ts",
+    "create-school": "tsx --env-file-if-exists=.env src/scripts/create-school.ts",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

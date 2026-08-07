@@ -34,7 +34,7 @@ The original scope this repo's spike validates. We own no student- or teacher-fa
 - **Infra footprint for us:** the watcher/ingestion service and swarm bootstrap only. No servers to host content, no accounts to manage.
 - This is exactly what `packages/engine` (the shared engine, `@campvus/engine`) + `apps/mode-a-headless` (the Mode A adapter and thin CLI shims — `src/watcher.ts`/`src/peer-node.ts`/`src/identity.ts`) are today, organized as a pnpm workspace (TypeScript, run via `tsx`, no build step yet). See §13 for what's built vs. outstanding.
 - **Mobile companion app: parked (not abandoned).** `apps/campvus` was reset to an Expo (React Native) scaffold, but Hyperswarm/HyperDHT don't run in Expo's managed workflow and only run in bare RN via an embedded Node runtime (`nodejs-mobile`) with hand-compiled native crypto/UDP modules and no iOS simulator support — a substantial separate project. See [ADR-0002](./adr/0002-electron-desktop-client-mobile-parked.md). `apps/campvus` stays in the repo unwired until mobile is picked back up.
-- **`apps/mode-a-desktop`** (Electron) is the actual near-term **Mode A companion app** (shape A2 from §10, per [ADR-0001](./adr/0001-mode-a-companion-app-not-lms-plugin.md), which resolves Open Question #8) — it wraps `packages/engine` directly, since Hyperswarm/Hypercore already run natively on desktop Node with no native-mobile complications (see [ADR-0002](./adr/0002-electron-desktop-client-mobile-parked.md)).
+- **`apps/mode-a-desktop`** (Electron) is the actual near-term **Mode A companion app** (shape A2 from §10, per [ADR-0001](./adr/0001-mode-a-companion-app-not-lms-plugin.md), which resolves Open Question #8) — it wraps `packages/engine` directly, since Hyperswarm already runs natively on desktop Node with no native-mobile complications (see [ADR-0002](./adr/0002-electron-desktop-client-mobile-parked.md)).
 
 ### 3.2 Mode B — Full App (we deploy infra, own both ends)
 
@@ -206,9 +206,9 @@ Two integration shapes, both still valid, now understood as sub-options *within*
 |---|---|
 | Language & tooling (current spike) | TypeScript, run directly via `tsx` — no compile/build step yet (see §13) |
 | Runtime (target) | Bare / Pear — **not yet adopted**; the current spike runs on plain Node.js with the `hyperswarm` npm package, a deliberate simplification for the spike, not yet reconciled with this row |
-| Content storage & transfer | Hyperdrive / Hypercore |
-| Peer discovery | Hyperswarm + HyperDHT, tiered (LAN → local cluster → wide) |
-| Cryptography | Ed25519 signing, BLAKE2b content hashing, Noise transport (via Hyperswarm) |
+| Content storage & transfer | Plain filesystem, content-addressed by hash (`packages/engine`'s content-store) — not Hyperdrive/Hypercore |
+| Peer discovery | Tiered per [ADR-0006](./adr/0006-real-discovery-tiers.md): Tier 1 (LAN) via mDNS/`bonjour-service`, direct TCP to discovered peers; Tier 2 (local cluster) via a second Hyperswarm/HyperDHT topic scoped by an operator-set region tag; Tier 3 (wide) via the course-wide Hyperswarm/HyperDHT topic |
+| Cryptography | Ed25519 signing, SHA-256 content hashing, Noise transport (via Hyperswarm; plain TCP for mDNS-discovered LAN peers) |
 | Key custody | AWS KMS (or on-prem HSM per institutional requirement) |
 | Mode A ingestion | LMS-native webhooks where available; REST API polling fallback |
 | Mode B ingestion | Direct upload API — Fastify, `apps/mode-b-api`, calls `@campvus/engine`'s `ingestBuffer` directly |
@@ -216,7 +216,7 @@ Two integration shapes, both still valid, now understood as sub-options *within*
 | Mode B teacher UI | React + Vite (`apps/mode-b-web`), served as static assets by `apps/mode-b-api` itself (`@fastify/static`) in production; Vite dev server proxies API calls in dev. Same-origin either way — no CORS/token handling needed. |
 | Mode B student UI | **Not built.** Needs real swarm participation (§5.5), which needs a Node/Electron shell like `apps/mode-a-desktop` — a browser can't run Hyperswarm. |
 | Mobile packaging | **Parked** — Bare mobile tooling / Pear vs. bare-RN + `nodejs-mobile` both viable in theory, neither chosen; see [ADR-0002](./adr/0002-electron-desktop-client-mobile-parked.md) |
-| Desktop packaging | Electron (`apps/mode-a-desktop`), wraps `packages/engine` directly — no native-mobile bindings needed, Node runs Hyperswarm/Hypercore natively |
+| Desktop packaging | Electron (`apps/mode-a-desktop`), wraps `packages/engine` directly — no native-mobile bindings needed, Node runs Hyperswarm natively |
 | Repo structure | pnpm workspace (`packages/engine`, `apps/mode-a-headless` CLI spike, `apps/mode-a-desktop` Electron client, `apps/mode-b-api` backend, `apps/mode-b-web` teacher UI); `apps/campvus` (Expo/React Native) is the parked mobile scaffold, unwired |
 
 ---
@@ -244,24 +244,24 @@ What exists today in `packages/engine` (`@campvus/engine`) + `apps/mode-a-headle
 **Built and tested:**
 - §5.2 signing/verification (crypto only) — Ed25519 sign/verify with tamper detection. **KMS/HSM custody is not built**; the secret key still lives in a local JSON file, explicitly flagged as spike-only.
 - §5.3 manifest & object model — content-hash addressing and dedup, working and tested.
-- §5.4 swarm topics — topic derivation (`sha256(courseId)`) works, but it's a single flat Hyperswarm join; no tiering.
+- §5.4 swarm topics — topic derivation (`sha256(courseId)`) works. As of [ADR-0006](./adr/0006-real-discovery-tiers.md), this is no longer a single flat join: `swarm-node.ts` also joins a region-scoped topic (`courseId + ':' + region`) when a region tag is configured (Tier 2).
 - §6 trust model — fully implemented and tested: signature check + hash check on receipt, reject and no partial acceptance on either mismatch.
 - §5.5 student-agent protocol logic — gossip manifests, diff against local, request missing, verify-on-receipt, become-a-seed; all pure and tested. CLI-only — no real app lifecycle (foreground/background, periodic check-in).
 - **Cross-device LAN discovery (§8 Tier 1)** — confirmed on two physical laptops on the same Wi-Fi network: connected within a few seconds, full manifest-gossip → request → download → verify cycle completed. This resolves what the README called the single most important open question. See Open Question #4.
 - **§5.6 origin fallback** — `engine/origin.ts`: when content isn't obtained from any peer within a configurable timeout (`--origin-timeout-ms`, default 15s), fetches it from a configured HTTP origin (`--origin=<baseUrl>`) and verifies it against the signed manifest hash exactly like peer-delivered content. Smoke-tested with no peer available at all — the file arrived from origin alone. `httpOriginFetcher` is a generic stand-in; a real Mode A adapter would point this at the LMS's actual file endpoint.
 - **§7 seeding rules** — storage eviction is real: `engine/eviction.ts` enforces an LRU-by-last-access cap (`--max-store-bytes`), evicting oldest-accessed content first, smoke-tested. Seed-only-after-completion was already true and remains so. **Metered-connection detection is real on Windows**: `engine/network-type.ts` shells out to PowerShell's WinRT `NetworkInformation`/`GetConnectionCost()` API (no compiled native module needed) to detect cellular/hotspot/user-marked-metered connections; `engine/seeding-policy.ts`'s `networkAwareSeedingPolicy` polls it and caches the result so seeding checks stay synchronous, defaulting to "seed freely" (per [ADR-0004](./adr/0004-desktop-seeds-freely-by-default.md)) whenever detection is undeterminable. macOS/Linux have no equivalent call yet — `isConnectionMetered` always returns `null` (unknown) on those platforms, so the manual `--seed=on|off` override (`fixedSeedingPolicy`) is still the only real control there; `--seed=auto` selects the network-aware policy where it's implemented.
-- **§8 discovery (peer preference, not real tiering)** — confirmed Hyperswarm/HyperDHT have no API to scope discovery to "LAN only" (read directly from both libraries' docs); real Tier 1/2/3 separation would need a separate mechanism (UDP broadcast/mDNS) alongside Hyperswarm, deliberately out of scope for this pass. What's built instead: requests are deduped per-hash across connected peers (only one peer is asked at a time, with a retry window if it doesn't deliver) rather than requesting the same file from everyone in parallel — a cheap improvement, not real tiering.
+- **§8 discovery — real Tier 1/2/3 separation, per [ADR-0006](./adr/0006-real-discovery-tiers.md)**: Tier 1 (LAN) uses an mDNS advertise/browse layer (`bonjour-service`) — a node advertises a `_campvus._tcp` service carrying the course topic and connects directly over TCP to same-LAN peers it discovers, bypassing the DHT entirely; Tier 2 (local cluster) joins a second Hyperswarm/HyperDHT topic scoped by an operator-set `region` tag (no region configured means Tier 2 is simply not joined); Tier 3 (wide) is the original flat course-wide topic join, unchanged. All applicable tiers are joined immediately and concurrently — no expanding-ring timer (see ADR-0006's rationale). Separately, requests are still deduped per-hash across connected peers regardless of which tier found them (only one peer is asked at a time, with a retry window if it doesn't deliver).
 - **§9 offline/sync semantics** — `engine/manifest-sync.ts`'s `syncManifestsFromOrigin` fetches the origin's full current manifest list and runs it through the same verified diff peer gossip already used, closing the gap for a client with zero reachable peers. `httpManifestListFetcher` is a generic stand-in (tested against `apps/mode-b-api`'s actual `GET /courses/:courseId/manifests` shape); no Mode A adapter wires this up yet since there's no real LMS integration to point it at (Open Question #9).
 
 **Not built yet:**
 - §10 real LMS integration — watcher is still a manual CLI trigger; no webhook/polling code exists.
-- Real Tier 1/2/3 discovery separation (see above) — would need a supplementary local-network discovery mechanism, not just Hyperswarm.
+- Region (Tier 2) is only exposed via `apps/mode-a-headless`'s `peer-node.ts --region` CLI flag; `apps/mode-a-desktop` doesn't wire it up yet (`main.ts` never sets `SwarmNodeOptions.region`), so the Electron client only ever gets Tier 1 + Tier 3.
 - Real Wi-Fi/mobile-data detection (see above) — needs OS-level APIs, deferred to real mobile packaging.
 - Mode B (§3.2) and live classes (§12.7) — untouched, deliberately deferred.
 
-**Open Question #4 is now resolved for Tier 1 (same Wi-Fi):** confirmed on two physical laptops on the same Wi-Fi network — Hyperswarm's DHT bootstrap connected within a few seconds, manifest gossiped, file requested, downloaded, and hash-verified. This was the single highest-priority validation step and it de-risks Mode A's core LAN-first assumption.
+**Open Question #4 is now resolved for Tier 1 (same Wi-Fi):** confirmed on two physical laptops on the same Wi-Fi network — Hyperswarm's DHT bootstrap connected within a few seconds, manifest gossiped, file requested, downloaded, and hash-verified. This was the single highest-priority validation step and it de-risks Mode A's core LAN-first assumption. [ADR-0006](./adr/0006-real-discovery-tiers.md) has since added the actual Tier 1 (mDNS) and Tier 2 (region-scoped topic) mechanisms, replacing the single flat topic join described above.
 
-What's still open on discovery specifically: cross-network conditions (different Wi-Fi networks, mobile hotspot, campus NAT/firewall) haven't been tested, and neither has Tier 2 (local cluster, not same LAN) or Tier 3 (wide DHT) — both still just theoretical per §8, with only the single flat topic join actually implemented.
+What's still open on discovery specifically: cross-network conditions (different Wi-Fi networks, mobile hotspot, campus NAT/firewall) haven't been tested for any tier, and Tier 2 hasn't been validated against a real multi-node region deployment — only unit/manual-tested locally, per ADR-0006's own caveat.
 
 ### 13.2 Mode B backend + teacher UI
 

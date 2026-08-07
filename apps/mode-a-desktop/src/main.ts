@@ -30,6 +30,9 @@ const courseId = process.env.CAMPVUS_COURSE_ID ?? 'COMSCI214';
 const institutionPublicKeyHex = process.env.CAMPVUS_INSTITUTION_PUBLIC_KEY;
 const originUrl = process.env.CAMPVUS_ORIGIN_URL;
 const maxStoreBytes = process.env.CAMPVUS_MAX_STORE_BYTES ? Number(process.env.CAMPVUS_MAX_STORE_BYTES) : undefined;
+// Tier 2 (local cluster, ADR-0006) — same CAMPVUS_REGION convention as
+// peer-node.ts's --region flag. Unset means Tier 2 is simply not joined.
+const region = process.env.CAMPVUS_REGION;
 
 // Surfaces "not configured yet" as the same tray error state a real engine
 // error would produce, instead of leaving the agent stuck on a misleading
@@ -56,6 +59,7 @@ if (institutionPublicKeyHex) {
     originFetcher: originUrl ? httpOriginFetcher(originUrl) : undefined,
     maxStoreBytes,
     seedingPolicy,
+    region,
   });
   agent = createAgent(swarmNode);
 } else {
@@ -84,13 +88,90 @@ const ICON_COLORS: Record<string, string> = {
   error: '#a53e2a',
 };
 
+// nativeImage.createFromDataURL doesn't decode SVG on Windows (it silently
+// returns an empty, 0x0 image — verified via isEmpty()), so the tray icon
+// must be rasterized as pixels directly rather than handed an SVG data URL.
+const ringIconCache = new Map<string, Electron.NativeImage>();
+
 function trayIcon(status: string): Electron.NativeImage {
-  // A "C" monogram (open ring, gap on the right) rendered as a 16x16 arc —
-  // legible at tray size without needing a rasterized asset. Recolored per
-  // status so the mark itself doubles as the state indicator.
   const color = ICON_COLORS[status] ?? ICON_COLORS.idle;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M12.6 4.14 A6 6 0 1 0 12.6 11.86" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round"/></svg>`;
-  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+  let icon = ringIconCache.get(color);
+  if (!icon) {
+    icon = renderRingIcon(color);
+    ringIconCache.set(color, icon);
+  }
+  return icon;
+}
+
+// A "C" monogram (open ring, gap on the right) — legible at tray size
+// without needing a rasterized asset checked into the repo. Recolored per
+// status so the mark itself doubles as the state indicator. Same geometry
+// as the original SVG (16x16, center (8,8), radius 6, stroke width 3, gap
+// spanning -40deg..40deg), supersampled 4x for anti-aliased edges.
+function renderRingIcon (hexColor: string): Electron.NativeImage {
+  const size = 16;
+  const supersample = 4;
+  const hiSize = size * supersample;
+  const cx = hiSize / 2;
+  const cy = hiSize / 2;
+  const radius = 6 * supersample;
+  const strokeWidth = 3 * supersample;
+  const gapStartDeg = -40;
+  const gapEndDeg = 40;
+  const { r, g, b } = hexToRgb(hexColor);
+
+  const hi = new Uint8ClampedArray(hiSize * hiSize * 4);
+  for (let y = 0; y < hiSize; y++) {
+    for (let x = 0; x < hiSize; x++) {
+      const dx = x + 0.5 - cx;
+      const dy = y + 0.5 - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      const inRing = Math.abs(dist - radius) <= strokeWidth / 2;
+      const inGap = angle >= gapStartDeg && angle <= gapEndDeg;
+      if (inRing && !inGap) {
+        const idx = (y * hiSize + x) * 4;
+        hi[idx] = r;
+        hi[idx + 1] = g;
+        hi[idx + 2] = b;
+        hi[idx + 3] = 255;
+      }
+    }
+  }
+
+  const buffer = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let rSum = 0;
+      let gSum = 0;
+      let bSum = 0;
+      let aSum = 0;
+      for (let sy = 0; sy < supersample; sy++) {
+        for (let sx = 0; sx < supersample; sx++) {
+          const idx = ((y * supersample + sy) * hiSize + (x * supersample + sx)) * 4;
+          const a = hi[idx + 3];
+          rSum += hi[idx] * a;
+          gSum += hi[idx + 1] * a;
+          bSum += hi[idx + 2] * a;
+          aSum += a;
+        }
+      }
+      if (aSum > 0) {
+        const outIdx = (y * size + x) * 4;
+        buffer[outIdx] = rSum / aSum;
+        buffer[outIdx + 1] = gSum / aSum;
+        buffer[outIdx + 2] = bSum / aSum;
+        buffer[outIdx + 3] = Math.round(aSum / (supersample * supersample));
+      }
+    }
+  }
+
+  return nativeImage.createFromBuffer(buffer, { width: size, height: size });
+}
+
+function hexToRgb (hex: string): { r: number; g: number; b: number } {
+  const n = parseInt(hex.slice(1), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
 let windowContents: Electron.WebContents | undefined;
