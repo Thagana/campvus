@@ -21,7 +21,7 @@ test('a Teacher creates a course; it is automatically scoped to their School and
 test('a Teacher sees and can manage every Course in their School, including ones a colleague created', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: colleagueCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
+  const { cookie: colleagueCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
 
   await app.inject({
     method: 'POST',
@@ -39,8 +39,8 @@ test('a Teacher sees and can manage every Course in their School, including ones
 test('a Teacher can enroll a student into a colleague\'s course, not just their own', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: colleagueCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
-  const { cookie: studentCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  const { cookie: colleagueCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
 
   await app.inject({
     method: 'POST',
@@ -64,7 +64,7 @@ test('a Teacher can enroll a student into a colleague\'s course, not just their 
 test('a Student sees and can access only the Courses they hold an Enrollment in, not every Course in the School', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: studentCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
 
   await app.inject({
     method: 'POST',
@@ -92,7 +92,7 @@ test('a Student sees and can access only the Courses they hold an Enrollment in,
 test('a Student attempting to create a Course is denied', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: studentCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
 
   const create = await app.inject({
     method: 'POST',
@@ -106,7 +106,7 @@ test('a Student attempting to create a Course is denied', async () => {
 test('only a Teacher can enroll School members in their School\'s Courses', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: studentCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
 
   await app.inject({
     method: 'POST',
@@ -163,7 +163,7 @@ test('enrolling an email that has an account but is not a member of the School f
     headers: { cookie: ownerCookie },
     payload: { id: 'COMSCI214', name: 'Intro to CS' }
   })
-  await registerUser(app, 'outsider@example.com')
+  await registerUser(app, db, 'outsider@example.com')
 
   const res = await app.inject({
     method: 'POST',
@@ -203,7 +203,7 @@ test('an authenticated account with no School membership is denied on every Scho
     headers: { cookie: ownerCookie },
     payload: { id: 'COMSCI214', name: 'Intro to CS' }
   })
-  const schoollessCookie = await registerUser(app, 'schoolless@example.com')
+  const schoollessCookie = await registerUser(app, db, 'schoolless@example.com')
 
   const create = await app.inject({
     method: 'POST',

@@ -6,7 +6,7 @@ import { createTestApp, createSchoolWithOwner, inviteAndAccept, registerUser, mu
 
 async function setupCourseWithStudent (app: FastifyInstance, db: Db): Promise<{ teacherCookie: string, studentCookie: string }> {
   const { organizationId, ownerCookie: teacherCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'teacher@school.edu' })
-  const { cookie: studentCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: teacherCookie, email: 'student@school.edu', role: 'student' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: teacherCookie, email: 'student@school.edu', role: 'student' })
   await app.inject({
     method: 'POST',
     url: '/courses',
@@ -58,7 +58,7 @@ test('a non-teacher cannot upload', async () => {
 test('an account with no School membership is denied on both manifest routes', async () => {
   const { app, db } = await createTestApp()
   await setupCourseWithStudent(app, db)
-  const schoollessCookie = await registerUser(app, 'schoolless@example.com')
+  const schoollessCookie = await registerUser(app, db, 'schoolless@example.com')
 
   const { body, contentType } = multipartBody('slides.pdf', Buffer.from('week 6 slides'))
   const upload = await app.inject({
@@ -98,7 +98,7 @@ test('an enrolled student can list manifests and fetch content by hash', async (
 test('a user not enrolled in the course cannot fetch its content by hash', async () => {
   const { app, db } = await createTestApp()
   const { teacherCookie } = await setupCourseWithStudent(app, db)
-  const outsiderCookie = await registerUser(app, 'outsider@school.edu')
+  const outsiderCookie = await registerUser(app, db, 'outsider@school.edu')
 
   const { body, contentType } = multipartBody('slides.pdf', Buffer.from('week 6 slides'))
   const upload = await app.inject({
@@ -116,7 +116,7 @@ test('a user not enrolled in the course cannot fetch its content by hash', async
 test("a colleague Teacher who didn't create the course can still list its manifests and fetch its content", async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie: teacherCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'teacher@school.edu' })
-  const { cookie: colleagueCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: teacherCookie, email: 'colleague@school.edu', role: 'teacher' })
+  const { cookie: colleagueCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: teacherCookie, email: 'colleague@school.edu', role: 'teacher' })
   await app.inject({
     method: 'POST',
     url: '/courses',
@@ -143,8 +143,8 @@ test("a colleague Teacher who didn't create the course can still list its manife
 })
 
 test('rejects a malformed hash before touching the filesystem (path traversal defense)', async () => {
-  const { app } = await createTestApp()
-  const teacherCookie = await registerUser(app, 'teacher@school.edu')
+  const { app, db } = await createTestApp()
+  const teacherCookie = await registerUser(app, db, 'teacher@school.edu')
 
   const traversal = await app.inject({
     method: 'GET',

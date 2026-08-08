@@ -5,17 +5,19 @@ import crypto from 'crypto'
 import http from 'http'
 import type { AddressInfo } from 'net'
 import { FastifyInstance } from 'fastify'
+import { eq } from 'drizzle-orm'
 import { resolvePaths, Paths, generateAndSaveKeypair, loadKeypair } from '@campvus/engine'
 import { openDb, Db } from '../src/db/client'
 import { buildServer } from '../src/server'
 import { createSchool } from '../src/auth/create-school'
+import { user } from '../src/db/schema'
 
 export function tmpPaths (): Paths {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mode-b-api-test-'))
   return resolvePaths(rootDir)
 }
 
-export async function createTestApp (): Promise<{ app: FastifyInstance, db: Db }> {
+export async function createTestApp (): Promise<{ app: FastifyInstance, db: Db, paths: Paths, keypair: ReturnType<typeof loadKeypair> }> {
   const paths = tmpPaths()
   generateAndSaveKeypair(paths)
   const keypair = loadKeypair(paths)
@@ -25,7 +27,7 @@ export async function createTestApp (): Promise<{ app: FastifyInstance, db: Db }
   // above) shouldn't touch.
   const authSecret = crypto.randomBytes(32).toString('hex')
   const app = await buildServer({ db, paths, keypair, authSecret })
-  return { app, db }
+  return { app, db, paths, keypair }
 }
 
 interface InjectResponseLike {
@@ -38,11 +40,21 @@ export function sessionCookieHeader (res: InjectResponseLike): string {
   return `${cookie.name}=${cookie.value}`
 }
 
-export async function registerUser (app: FastifyInstance, email: string, password = 'hunter22'): Promise<string> {
-  const res = await app.inject({
+// Sign-up alone no longer grants a session (auth.ts's
+// requireEmailVerification) — this stands in for "the user clicked the
+// emailed verification link" by flipping emailVerified directly in the DB,
+// then signs in for real to get a session cookie back.
+export async function registerUser (app: FastifyInstance, db: Db, email: string, password = 'hunter22'): Promise<string> {
+  await app.inject({
     method: 'POST',
     url: '/api/auth/sign-up/email',
     payload: { email, password, name: email }
+  })
+  await db.update(user).set({ emailVerified: true }).where(eq(user.email, email))
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/auth/sign-in/email',
+    payload: { email, password }
   })
   return sessionCookieHeader(res)
 }
@@ -55,7 +67,7 @@ export async function createSchoolWithOwner (
   { name, founderEmail }: { name: string, founderEmail: string }
 ): Promise<{ organizationId: string, ownerCookie: string, ownerMemberId: string }> {
   const { organizationId, invitationId } = await createSchool(db, { name, founderEmail })
-  const ownerCookie = await registerUser(app, founderEmail)
+  const ownerCookie = await registerUser(app, db, founderEmail)
   const accept = await app.inject({
     method: 'POST',
     url: '/api/auth/organization/accept-invitation',
@@ -71,6 +83,7 @@ export async function createSchoolWithOwner (
 // invite/accept mechanics themselves (those get their own dedicated tests).
 export async function inviteAndAccept (
   app: FastifyInstance,
+  db: Db,
   { organizationId, inviterCookie, email, role }: { organizationId: string, inviterCookie: string, email: string, role: string }
 ): Promise<{ invitationId: string, cookie: string, member: { id: string, role: string } }> {
   const invite = await app.inject({
@@ -81,7 +94,7 @@ export async function inviteAndAccept (
   })
   if (invite.statusCode !== 200) throw new Error(`invite to ${email} as ${role} failed: ${invite.body}`)
 
-  const cookie = await registerUser(app, email)
+  const cookie = await registerUser(app, db, email)
   const invitationId = invite.json().id
   const accept = await app.inject({
     method: 'POST',

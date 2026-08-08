@@ -87,6 +87,21 @@ test('mergeConfig falls back to the COMSCI214 default courseIds when neither sou
   assert.deepEqual(merged.courseIds, ['COMSCI214'])
 })
 
+test('mergeConfig prefers the file modeBToken over env defaults, same as other fields', () => {
+  const merged = mergeConfig(
+    { courseIds: ['ENV-COURSE'], modeBToken: 'env-token' },
+    { modeBToken: 'file-token' }
+  )
+
+  assert.equal(merged.modeBToken, 'file-token')
+})
+
+test('mergeConfig leaves modeBToken undefined when neither source sets one', () => {
+  const merged = mergeConfig({}, {})
+
+  assert.equal(merged.modeBToken, undefined)
+})
+
 test('loadConfigFile returns an empty object when the file does not exist', () => {
   const missingPath = path.join(os.tmpdir(), `campvus-config-missing-${Date.now()}.json`)
 

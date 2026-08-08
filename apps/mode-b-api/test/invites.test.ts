@@ -15,7 +15,7 @@ test('a Teacher can invite another Teacher by email; that person can accept and 
   })
   assert.equal(invite.statusCode, 200)
 
-  const cookie = await registerUser(app, 'colleague@riverside.edu')
+  const cookie = await registerUser(app, db, 'colleague@riverside.edu')
 
   // Unlike the founding invitation (create-school.ts — no real inviterId,
   // so get-invitation can't resolve one), a regular Teacher-issued invite
@@ -66,7 +66,7 @@ test('a Teacher can invite a Student by email; that person can accept and their 
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
 
-  const { member } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  const { member } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
   assert.equal(member.role, 'student')
 })
 
@@ -74,7 +74,7 @@ test('a Student attempting to invite anyone is denied', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
 
-  const { cookie: studentCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
 
   const deniedInvite = await app.inject({
     method: 'POST',
@@ -105,7 +105,7 @@ test("a person who's already an accepted member of one School has their accept o
   const schoolA = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner-a@example.edu' })
   const schoolB = await createSchoolWithOwner(app, db, { name: 'Lakeside High', founderEmail: 'owner-b@example.edu' })
 
-  const { cookie: roamerCookie } = await inviteAndAccept(app, {
+  const { cookie: roamerCookie } = await inviteAndAccept(app, db, {
     organizationId: schoolA.organizationId, inviterCookie: schoolA.ownerCookie, email: 'roamer@example.edu', role: 'teacher'
   })
 

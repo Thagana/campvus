@@ -88,6 +88,21 @@ test('httpManifestListFetcher GETs /courses/:courseId/manifests and parses the J
   })
 })
 
+test('httpManifestListFetcher sends provided headers (e.g. an Authorization bearer token for a live Mode B origin)', async () => {
+  let receivedAuth: string | undefined
+
+  await withServer((req, res) => {
+    receivedAuth = req.headers.authorization
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify([]))
+  }, async (baseUrl) => {
+    const fetcher = httpManifestListFetcher(baseUrl, { Authorization: 'Bearer test-token' })
+    await fetcher('COMSCI214')
+  })
+
+  assert.equal(receivedAuth, 'Bearer test-token')
+})
+
 test('syncManifestsFromOrigin rejects an origin-sourced manifest with an invalid signature', async () => {
   const keypair = nacl.sign.keyPair()
   const otherKeypair = nacl.sign.keyPair()

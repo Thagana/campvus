@@ -15,8 +15,8 @@ import { WEB_URL } from '../src/config'
 process.env.CAMPVUS_ADMIN_EMAILS = 'admin@campvus.example'
 
 test('a non-admin is refused on both admin routes', async () => {
-  const { app } = await createTestApp()
-  const cookie = await registerUser(app, 'someone@example.com')
+  const { app, db } = await createTestApp()
+  const cookie = await registerUser(app, db, 'someone@example.com')
 
   const create = await app.inject({
     method: 'POST',
@@ -41,7 +41,7 @@ test('a platform admin can create a School, which sends the founding invitation 
   // Registering (sign-up) sends its own verification email — done before
   // entering withBrevoStandIn so only the invitation email below lands in
   // its capture, not both.
-  const adminCookie = await registerUser(app, 'admin@campvus.example')
+  const adminCookie = await registerUser(app, db, 'admin@campvus.example')
 
   await withBrevoStandIn(async (received) => {
     const create = await app.inject({
@@ -68,8 +68,8 @@ test('a platform admin can create a School, which sends the founding invitation 
 })
 
 test('creating a School with a name that collides on slug is refused with 409, not a raw 500', async () => {
-  const { app } = await createTestApp()
-  const adminCookie = await registerUser(app, 'admin@campvus.example')
+  const { app, db } = await createTestApp()
+  const adminCookie = await registerUser(app, db, 'admin@campvus.example')
 
   const first = await app.inject({
     method: 'POST',
@@ -89,8 +89,8 @@ test('creating a School with a name that collides on slug is refused with 409, n
 })
 
 test('a platform admin can list Schools they created', async () => {
-  const { app } = await createTestApp()
-  const adminCookie = await registerUser(app, 'admin@campvus.example')
+  const { app, db } = await createTestApp()
+  const adminCookie = await registerUser(app, db, 'admin@campvus.example')
 
   await app.inject({
     method: 'POST',
@@ -107,8 +107,8 @@ test('a platform admin can list Schools they created', async () => {
 })
 
 test('end to end: admin creates a School, founding Teacher registers and accepts, unaffected by CAMPVUS_ADMIN_EMAILS not matching them', async () => {
-  const { app } = await createTestApp()
-  const adminCookie = await registerUser(app, 'admin@campvus.example')
+  const { app, db } = await createTestApp()
+  const adminCookie = await registerUser(app, db, 'admin@campvus.example')
 
   const create = await app.inject({
     method: 'POST',
@@ -119,7 +119,7 @@ test('end to end: admin creates a School, founding Teacher registers and accepts
   assert.equal(create.statusCode, 201)
   const { invitationId } = create.json()
 
-  const founderCookie = await registerUser(app, 'founder@riverside.edu')
+  const founderCookie = await registerUser(app, db, 'founder@riverside.edu')
   const accept = await app.inject({
     method: 'POST',
     url: '/api/auth/organization/accept-invitation',

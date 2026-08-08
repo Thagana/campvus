@@ -20,6 +20,13 @@ export interface DesktopConfig {
   manifestOriginUrl?: string
   region?: string
   maxStoreBytes?: number
+  // Set by the "Sign in to Campvus" flow (main.ts's campvus:login-mode-b
+  // handler) once a live apps/mode-b-api origin is in use — origin.ts's
+  // httpOriginFetcher and manifest-sync.ts's httpManifestListFetcher send
+  // it as `Authorization: Bearer <token>` (Open Question #9(a)). Not
+  // user-entered directly, so it has no field in the manual Settings form
+  // or validateConfig below.
+  modeBToken?: string
 }
 
 export type PartialDesktopConfig = Partial<DesktopConfig>
@@ -79,7 +86,8 @@ export function mergeConfig (envDefaults: PartialDesktopConfig, fileConfig: Part
     originUrl: fileConfig.originUrl ?? envDefaults.originUrl,
     manifestOriginUrl: fileConfig.manifestOriginUrl ?? envDefaults.manifestOriginUrl,
     region: fileConfig.region ?? envDefaults.region,
-    maxStoreBytes: fileConfig.maxStoreBytes ?? envDefaults.maxStoreBytes
+    maxStoreBytes: fileConfig.maxStoreBytes ?? envDefaults.maxStoreBytes,
+    modeBToken: fileConfig.modeBToken ?? envDefaults.modeBToken
   }
 }
 

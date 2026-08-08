@@ -25,6 +25,11 @@ const settingsCancel = document.getElementById('settings-cancel') as HTMLButtonE
 const settingsForm = document.getElementById('settings-form') as HTMLFormElement;
 const settingsError = document.getElementById('settings-error') as HTMLElement;
 
+const loginForm = document.getElementById('login-form') as HTMLFormElement;
+const loginSubmit = document.getElementById('login-submit') as HTMLButtonElement;
+const loginError = document.getElementById('login-error') as HTMLElement;
+const loginStatus = document.getElementById('login-status') as HTMLElement;
+
 let latestState: AppState | undefined;
 
 function render(state: AppState): void {
@@ -94,6 +99,36 @@ settingsForm.addEventListener('submit', async (event) => {
   }
 
   showSettings(false);
+});
+
+loginForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  loginError.hidden = true;
+  loginStatus.hidden = false;
+  loginStatus.textContent = 'Signing in…';
+  loginSubmit.disabled = true;
+
+  const data = new FormData(loginForm);
+  try {
+    const result = await window.campvus.loginModeB({
+      modeBUrl: (data.get('modeBUrl') as string).trim(),
+      email: (data.get('email') as string).trim(),
+      password: data.get('password') as string,
+    });
+
+    if (!result.ok) {
+      loginStatus.hidden = true;
+      loginError.textContent = result.error;
+      loginError.hidden = false;
+      return;
+    }
+
+    loginStatus.textContent = 'Signed in.';
+    populateForm(result.config);
+    showSettings(false);
+  } finally {
+    loginSubmit.disabled = false;
+  }
 });
 
 window.campvus.getState().then((state) => {

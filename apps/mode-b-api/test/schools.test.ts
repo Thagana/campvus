@@ -25,7 +25,7 @@ test('the founding Teacher can sign up and accept their Owner invitation', async
   const { app, db } = await createTestApp()
   const { invitationId } = await createSchool(db, { name: 'Riverside High', founderEmail: 'founder@riverside.edu' })
 
-  const cookie = await registerUser(app, 'founder@riverside.edu')
+  const cookie = await registerUser(app, db, 'founder@riverside.edu')
 
   const accept = await app.inject({
     method: 'POST',
@@ -42,8 +42,8 @@ test('the founding Teacher can sign up and accept their Owner invitation', async
 })
 
 test('self-serve organization creation is refused', async () => {
-  const { app } = await createTestApp()
-  const cookie = await registerUser(app, 'someone@example.com')
+  const { app, db } = await createTestApp()
+  const cookie = await registerUser(app, db, 'someone@example.com')
 
   const res = await app.inject({
     method: 'POST',
@@ -56,8 +56,8 @@ test('self-serve organization creation is refused', async () => {
 })
 
 test('sign-up is unaffected: an account with no School membership can still sign in', async () => {
-  const { app } = await createTestApp()
-  const cookie = await registerUser(app, 'nobody@example.com')
+  const { app, db } = await createTestApp()
+  const cookie = await registerUser(app, db, 'nobody@example.com')
 
   const me = await app.inject({ method: 'GET', url: '/api/auth/get-session', headers: { cookie } })
   assert.equal(me.statusCode, 200)

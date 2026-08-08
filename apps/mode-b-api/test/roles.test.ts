@@ -12,8 +12,8 @@ import { member } from '../src/db/schema'
 test('a Teacher can promote a Student to Teacher', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: teacherCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'teacher@riverside.edu', role: 'teacher' })
-  const { member: studentMember } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  const { cookie: teacherCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'teacher@riverside.edu', role: 'teacher' })
+  const { member: studentMember } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
 
   const promote = await app.inject({
     method: 'POST',
@@ -28,8 +28,8 @@ test('a Teacher can promote a Student to Teacher', async () => {
 test('a Teacher can demote another Teacher to Student', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: actingTeacherCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'acting-teacher@riverside.edu', role: 'teacher' })
-  const { member: colleague } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
+  const { cookie: actingTeacherCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'acting-teacher@riverside.edu', role: 'teacher' })
+  const { member: colleague } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
 
   const demote = await app.inject({
     method: 'POST',
@@ -44,8 +44,8 @@ test('a Teacher can demote another Teacher to Student', async () => {
 test('a Teacher can remove another member from the School entirely', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: teacherCookie } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'teacher@riverside.edu', role: 'teacher' })
-  await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'leaving@riverside.edu', role: 'student' })
+  const { cookie: teacherCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'teacher@riverside.edu', role: 'teacher' })
+  await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'leaving@riverside.edu', role: 'student' })
 
   const remove = await app.inject({
     method: 'POST',
@@ -69,7 +69,7 @@ test('a Teacher can remove another member from the School entirely', async () =>
 test('update-member-role cannot grant the owner role either', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { member: teacherMember } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'teacher@riverside.edu', role: 'teacher' })
+  const { member: teacherMember } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'teacher@riverside.edu', role: 'teacher' })
 
   const promoteToOwner = await app.inject({
     method: 'POST',
@@ -111,7 +111,7 @@ test('the last-Teacher guard also protects a lone plain Teacher, not just the Ow
   // can't reach today, but the guard should hold regardless.
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie, ownerMemberId } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: soleTeacherCookie, member: soleTeacher } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'sole-teacher@riverside.edu', role: 'teacher' })
+  const { cookie: soleTeacherCookie, member: soleTeacher } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'sole-teacher@riverside.edu', role: 'teacher' })
 
   await db.delete(member).where(eq(member.id, ownerMemberId))
 
@@ -135,8 +135,8 @@ test('the last-Teacher guard also protects a lone plain Teacher, not just the Ow
 test('a demoted Teacher immediately loses Teacher-level access (inviting, role changes) on their very next request', async () => {
   const { app, db } = await createTestApp()
   const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
-  const { cookie: colleagueCookie, member: colleague } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
-  const { member: bystander } = await inviteAndAccept(app, { organizationId, inviterCookie: ownerCookie, email: 'bystander@riverside.edu', role: 'student' })
+  const { cookie: colleagueCookie, member: colleague } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
+  const { member: bystander } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'bystander@riverside.edu', role: 'student' })
 
   const demote = await app.inject({
     method: 'POST',

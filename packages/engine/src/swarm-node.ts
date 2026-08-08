@@ -425,7 +425,7 @@ function parseArgs (argv: string[]): Opts {
 export async function run (argv: string[], paths: Paths): Promise<void> {
   const opts = parseArgs(argv)
   if (!opts.courseIds) {
-    console.log('Usage: peer-node <courseIds> --content-dir=<path> [--pubkey=<hex>] [--origin=<baseUrl>] [--manifest-origin=<baseUrl>] [--manifest-sync-interval-ms=<n>] [--max-store-bytes=<n>] [--seed=on|off|auto] [--region=<tag>]\n  <courseIds> is comma-separated, e.g. COMSCI214,MATH101')
+    console.log('Usage: peer-node <courseIds> --content-dir=<path> [--pubkey=<hex>] [--origin=<baseUrl>] [--manifest-origin=<baseUrl>] [--bearer-token=<token>] [--manifest-sync-interval-ms=<n>] [--max-store-bytes=<n>] [--seed=on|off|auto] [--region=<tag>]\n  <courseIds> is comma-separated, e.g. COMSCI214,MATH101\n  --bearer-token is required when --origin/--manifest-origin point at a live apps/mode-b-api (session-gated routes)')
     process.exit(1)
   }
   const courseIds = opts.courseIds.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
@@ -435,12 +435,20 @@ export async function run (argv: string[], paths: Paths): Promise<void> {
   const contentDir = path.resolve(opts['content-dir'] || './content-store')
   const publicKeyHex = opts.pubkey || loadPublicKeyHex(paths)
 
-  const originFetcher = opts.origin ? httpOriginFetcher(opts.origin) : undefined
+  // Both origin.ts's httpOriginFetcher and manifest-sync.ts's
+  // httpManifestListFetcher take the same optional Authorization header — a
+  // real apps/mode-b-api origin gates both routes behind a session, unlike
+  // an LMS origin. --bearer-token is the Mode A CLI's own credential story
+  // for that (Open Question #9(a)); apps/mode-a-desktop's Settings-panel
+  // login flow is the other caller of the same header option.
+  const authHeaders = opts['bearer-token'] ? { Authorization: `Bearer ${opts['bearer-token']}` } : undefined
+
+  const originFetcher = opts.origin ? httpOriginFetcher(opts.origin, authHeaders) : undefined
   const originTimeoutMs = opts['origin-timeout-ms'] ? Number(opts['origin-timeout-ms']) : DEFAULT_ORIGIN_TIMEOUT_MS
   // Separate from --origin: a real origin (e.g. apps/mode-b-api) serves the
   // manifest list and file bytes from different routes, so this is its own
   // base URL rather than derived from --origin (see manifest-sync.ts).
-  const manifestListFetcher = opts['manifest-origin'] ? httpManifestListFetcher(opts['manifest-origin']) : undefined
+  const manifestListFetcher = opts['manifest-origin'] ? httpManifestListFetcher(opts['manifest-origin'], authHeaders) : undefined
   const manifestSyncIntervalMs = opts['manifest-sync-interval-ms'] ? Number(opts['manifest-sync-interval-ms']) : undefined
   const maxStoreBytes = opts['max-store-bytes'] ? Number(opts['max-store-bytes']) : undefined
   const seedingPolicy: SeedingPolicy =

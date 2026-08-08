@@ -12,6 +12,7 @@ import { registerCourseRoutes } from './routes/courses'
 import { registerManifestRoutes } from './routes/manifests'
 import { registerContentRoutes } from './routes/content'
 import { registerAdminRoutes } from './routes/admin'
+import { registerPublicKeyRoutes } from './routes/public-key'
 
 export interface ServerDeps {
   db: Db
@@ -42,6 +43,7 @@ export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
   registerManifestRoutes(app, deps.db, deps.paths, deps.keypair)
   registerContentRoutes(app, deps.db, deps.paths)
   registerAdminRoutes(app, deps.db)
+  registerPublicKeyRoutes(app, deps.keypair)
 
   // Serves apps/mode-b-web's built assets once `npm run build` has been run
   // there. In dev, use Vite's own dev server instead — it proxies API

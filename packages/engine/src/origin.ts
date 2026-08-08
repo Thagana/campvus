@@ -15,10 +15,14 @@ import { SignedManifest } from './types'
 
 export type OriginFetcher = (manifest: SignedManifest) => Promise<Buffer | null>
 
-export function httpOriginFetcher (baseUrl: string): OriginFetcher {
+// headers is optional: an LMS origin (Mode A) is typically unauthenticated,
+// but a real apps/mode-b-api origin gates /content/:hash behind a session —
+// callers pointing this at Mode B pass an `Authorization: Bearer <token>`
+// header here (see Open Question #9(a), docs/ARCHITECTURE.md).
+export function httpOriginFetcher (baseUrl: string, headers?: Record<string, string>): OriginFetcher {
   const base = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'
   return async (manifest: SignedManifest): Promise<Buffer | null> => {
-    const res = await fetch(new URL(manifest.hash, base))
+    const res = await fetch(new URL(manifest.hash, base), { headers })
     if (!res.ok) return null
     const arrayBuffer = await res.arrayBuffer()
     return Buffer.from(arrayBuffer)

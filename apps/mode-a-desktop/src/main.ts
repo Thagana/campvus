@@ -8,7 +8,7 @@ import { selectDesktopSeedingPolicy } from './seeding-policy-selection';
 import { configureAutoLaunch } from './auto-launch';
 import { getPaths } from './paths';
 import { loadConfigFile, saveConfigFile, mergeConfig, validateConfig, DesktopConfig, PartialDesktopConfig } from './config-store';
-import type { AppState, SaveConfigResult } from './preload-api';
+import type { AppState, SaveConfigResult, LoginModeBArgs, LoginModeBResult } from './preload-api';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -81,16 +81,26 @@ function wireAgent (nextAgent: Agent): void {
 // without starting any networking — kept separate from starting so the
 // original ADR-0003 timing holds: the node is constructed eagerly at module
 // load, but .start() is still deferred to app.on('ready').
+// A live apps/mode-b-api origin gates both /content/:hash and
+// /courses/:courseId/manifests behind a session (Open Question #9(a)) —
+// an LMS origin (the other thing originUrl/manifestOriginUrl can point at)
+// has no such requirement, so this is undefined unless a Mode B login
+// actually happened.
+function authHeaders (config: DesktopConfig): Record<string, string> | undefined {
+  return config.modeBToken ? { Authorization: `Bearer ${config.modeBToken}` } : undefined;
+}
+
 function configureEngine (config: DesktopConfig): void {
   currentConfig = config;
   if (config.institutionPublicKeyHex) {
+    const headers = authHeaders(config);
     swarmNode = createSwarmNode({
       courseIds: config.courseIds,
       contentDir: paths.contentStoreDir,
       publicKeyHex: config.institutionPublicKeyHex,
       paths,
-      originFetcher: config.originUrl ? httpOriginFetcher(config.originUrl) : undefined,
-      manifestListFetcher: config.manifestOriginUrl ? httpManifestListFetcher(config.manifestOriginUrl) : undefined,
+      originFetcher: config.originUrl ? httpOriginFetcher(config.originUrl, headers) : undefined,
+      manifestListFetcher: config.manifestOriginUrl ? httpManifestListFetcher(config.manifestOriginUrl, headers) : undefined,
       manifestSyncIntervalMs: config.manifestOriginUrl ? MANIFEST_SYNC_INTERVAL_MS : undefined,
       maxStoreBytes: config.maxStoreBytes,
       seedingPolicy,
@@ -141,6 +151,76 @@ ipcMain.handle('campvus:save-config', async (_event, config: PartialDesktopConfi
   saveConfigFile(configFile, merged);
   await restartEngine(merged as DesktopConfig);
   return { ok: true };
+});
+
+// Signs a student in against a live apps/mode-b-api instance and derives
+// the rest of the config from it, instead of asking a pilot student to
+// hand-copy an institution public key and course IDs. Runs entirely in the
+// main process — no CORS to worry about (this isn't a browser fetch) and
+// no cookie jar needed, since Mode B's bearer plugin (auth/auth.ts) accepts
+// the token this returns as an ordinary Authorization header.
+ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Promise<LoginModeBResult> => {
+  const trimmedUrl = args.modeBUrl.trim();
+  if (!trimmedUrl) return { ok: false, error: 'Campvus server URL is required.' };
+  let base: URL;
+  try {
+    base = new URL(trimmedUrl.endsWith('/') ? trimmedUrl : trimmedUrl + '/');
+  } catch {
+    return { ok: false, error: 'Campvus server URL must be a valid URL.' };
+  }
+
+  let signInRes: Response;
+  try {
+    signInRes = await fetch(new URL('api/auth/sign-in/email', base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: args.email, password: args.password }),
+    });
+  } catch (err) {
+    return { ok: false, error: `Could not reach ${trimmedUrl}: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  if (!signInRes.ok) {
+    const body = await signInRes.json().catch(() => undefined) as { message?: string } | undefined;
+    return { ok: false, error: body?.message || 'Sign-in failed — check your email and password.' };
+  }
+  const token = signInRes.headers.get('set-auth-token');
+  if (!token) return { ok: false, error: 'Server did not return a session token (is it running the bearer auth plugin?).' };
+  const headers = { Authorization: `Bearer ${token}` };
+
+  let publicKeyRes: Response;
+  let coursesRes: Response;
+  try {
+    [publicKeyRes, coursesRes] = await Promise.all([
+      fetch(new URL('public-key', base), { headers }),
+      fetch(new URL('courses', base), { headers }),
+    ]);
+  } catch (err) {
+    return { ok: false, error: `Signed in, but could not fetch account details: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  if (!publicKeyRes.ok) return { ok: false, error: 'Signed in, but could not fetch the institution public key.' };
+  if (!coursesRes.ok) return { ok: false, error: 'Signed in, but could not fetch your courses.' };
+
+  const { publicKeyHex } = await publicKeyRes.json() as { publicKeyHex: string };
+  const courses = await coursesRes.json() as Array<{ id: string }>;
+  const courseIds = courses.map((c) => c.id);
+  if (courseIds.length === 0) {
+    return { ok: false, error: "Signed in, but you're not enrolled in (or teaching) any courses yet." };
+  }
+
+  const merged: PartialDesktopConfig = {
+    ...currentConfig,
+    modeBToken: token,
+    institutionPublicKeyHex: publicKeyHex,
+    originUrl: trimmedUrl,
+    manifestOriginUrl: trimmedUrl,
+    courseIds,
+  };
+  const errors = validateConfig(merged);
+  if (errors.length > 0) return { ok: false, error: errors.map((e) => e.message).join(' ') };
+
+  saveConfigFile(configFile, merged);
+  await restartEngine(merged as DesktopConfig);
+  return { ok: true, config: merged };
 });
 
 // Matches @campvus/design's --text-muted / --accent / --danger tokens, so

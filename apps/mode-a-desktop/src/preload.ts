@@ -12,7 +12,8 @@ const api: CampvusApi = {
     return () => ipcRenderer.removeListener('campvus:state-changed', listener)
   },
   getConfig: () => ipcRenderer.invoke('campvus:get-config'),
-  saveConfig: (config) => ipcRenderer.invoke('campvus:save-config', config)
+  saveConfig: (config) => ipcRenderer.invoke('campvus:save-config', config),
+  loginModeB: (args) => ipcRenderer.invoke('campvus:login-mode-b', args)
 }
 
 contextBridge.exposeInMainWorld('campvus', api)

@@ -21,11 +21,12 @@ import { buildSchoolRoles } from './roles'
 const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30
 
 export async function createAuth (db: Db, secret: string) {
-  const [{ betterAuth }, { drizzleAdapter }, { fromNodeHeaders }, { organization: organizationPlugin }, roles, organizationHooks] = await Promise.all([
+  const [{ betterAuth }, { drizzleAdapter }, { fromNodeHeaders }, { organization: organizationPlugin }, { bearer }, roles, organizationHooks] = await Promise.all([
     import('better-auth'),
     import('better-auth/adapters/drizzle'),
     import('better-auth/node'),
     import('better-auth/plugins/organization'),
+    import('better-auth/plugins/bearer'),
     buildSchoolRoles(),
     buildOrganizationHooks(db)
   ])
@@ -78,6 +79,17 @@ export async function createAuth (db: Db, secret: string) {
     // origin there instead of hardcoding it here.
     trustedOrigins: [WEB_URL],
     plugins: [
+      // Lets a non-browser client (apps/mode-a-desktop's Electron main
+      // process — no cookie jar, and Hyperswarm can't run in a browser
+      // anyway) authenticate with `Authorization: Bearer <session-token>`
+      // instead of a cookie. auth/guards.ts's installRequestUser already
+      // calls auth.api.getSession() on every request; this plugin makes
+      // that call transparently recognize the header too, so no guard code
+      // changes — closes Open Question #9(a) (docs/ARCHITECTURE.md), the
+      // Mode A <-> Mode B origin-auth gap. Sign-in responses carry the
+      // token back in a `set-auth-token` response header (better-auth's own
+      // convention) instead of a cookie for callers that send this header.
+      bearer(),
       organizationPlugin({
         ac: roles.ac,
         roles: { owner: roles.owner, teacher: roles.teacher, student: roles.student },

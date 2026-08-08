@@ -16,10 +16,13 @@ export type FetchManifestList = (courseId: string) => Promise<SignedManifest[]>
 // apps/mode-b-api's real `GET /courses/:courseId/manifests` shape. A Mode A
 // adapter would point this at whatever the LMS's equivalent endpoint turns
 // out to be (Open Question #9 — no such endpoint exists for Mode A yet).
-export function httpManifestListFetcher (baseUrl: string): FetchManifestList {
+// headers mirrors httpOriginFetcher's — Mode B's manifest-list route is
+// session-gated, so a caller pointed at a live apps/mode-b-api passes an
+// `Authorization: Bearer <token>` header here.
+export function httpManifestListFetcher (baseUrl: string, headers?: Record<string, string>): FetchManifestList {
   const base = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'
   return async (courseId: string): Promise<SignedManifest[]> => {
-    const res = await fetch(new URL(`courses/${courseId}/manifests`, base))
+    const res = await fetch(new URL(`courses/${courseId}/manifests`, base), { headers })
     if (!res.ok) return []
     return await res.json() as SignedManifest[]
   }

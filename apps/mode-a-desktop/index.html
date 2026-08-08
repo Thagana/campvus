@@ -37,6 +37,30 @@
       </section>
 
       <section class="card settings-card" id="settings-section" hidden>
+        <h2>Sign in to Campvus</h2>
+        <p class="muted">Signs in against your school's Campvus server and fills in the fields below automatically — the manual fields further down are only for a plain LMS origin, not a Campvus account.</p>
+        <form id="login-form">
+          <label>
+            Campvus server URL
+            <input type="text" id="field-modeBUrl" name="modeBUrl" placeholder="https://campvus.example.edu" required />
+          </label>
+          <label>
+            Email
+            <input type="email" id="field-email" name="email" required />
+          </label>
+          <label>
+            Password
+            <input type="password" id="field-password" name="password" required />
+          </label>
+
+          <p class="error" id="login-error" hidden></p>
+          <p class="muted" id="login-status" hidden></p>
+
+          <div class="row">
+            <button type="submit" class="btn btn-primary" id="login-submit">Sign in</button>
+          </div>
+        </form>
+
         <h2>Settings</h2>
         <form id="settings-form">
           <label>

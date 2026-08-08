@@ -51,6 +51,23 @@ test('httpOriginFetcher fetches bytes by hash from the configured base URL', asy
   })
 })
 
+test('httpOriginFetcher sends provided headers (e.g. an Authorization bearer token for a live Mode B origin)', async () => {
+  const bytes = Buffer.from('origin content')
+  const hash = hashBuffer(bytes)
+  let receivedAuth: string | undefined
+
+  await withServer((req, res) => {
+    receivedAuth = req.headers.authorization
+    res.writeHead(200)
+    res.end(bytes)
+  }, async (baseUrl) => {
+    const fetcher = httpOriginFetcher(baseUrl, { Authorization: 'Bearer test-token' })
+    await fetcher(makeManifest(hash))
+  })
+
+  assert.equal(receivedAuth, 'Bearer test-token')
+})
+
 test('httpOriginFetcher returns null on a 404 (origin does not have it either)', async () => {
   await withServer((_req, res) => {
     res.writeHead(404)
