@@ -8,7 +8,7 @@
 import '@fontsource/poppins/latin-400.css';
 import '@fontsource/poppins/latin-500.css';
 import '@fontsource/poppins/latin-600.css';
-import '@phosphor-icons/web/regular';
+import '@phosphor-icons/web/regular/style.css';
 import '@campvus/design/index.css';
 import './index.css';
 import { describeState } from './status-view';
