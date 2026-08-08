@@ -4,16 +4,21 @@ import LoginPage from './pages/LoginPage'
 import CoursesPage from './pages/CoursesPage'
 import CourseDetailPage from './pages/CourseDetailPage'
 import AcceptInvitePage from './pages/AcceptInvitePage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import AdminPage from './pages/AdminPage'
 
 type View = { name: 'courses' } | { name: 'course', courseId: string } | { name: 'admin' }
 
-// A fresh browser navigation to an emailed accept-invite link (not a
-// client-side transition — see server.ts's SPA fallback) reloads this
-// module, so reading location once at module scope is enough; this page
-// never needs client-side routing beyond that one entry point.
+// A fresh browser navigation to an emailed accept-invite/reset-password
+// link (not a client-side transition — see server.ts's SPA fallback)
+// reloads this module, so reading location once at module scope is enough;
+// this page never needs client-side routing beyond these entry points.
 const invitationId = window.location.pathname === '/accept-invite'
   ? new URLSearchParams(window.location.search).get('id')
+  : null
+
+const resetPasswordToken = window.location.pathname === '/reset-password'
+  ? new URLSearchParams(window.location.search).get('token')
   : null
 
 export default function App () {
@@ -28,6 +33,10 @@ export default function App () {
 
   if (invitationId) {
     return <AcceptInvitePage invitationId={invitationId} />
+  }
+
+  if (resetPasswordToken) {
+    return <ResetPasswordPage token={resetPasswordToken} />
   }
 
   if (isPending) {

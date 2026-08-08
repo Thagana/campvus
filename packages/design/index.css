@@ -146,9 +146,17 @@ a {
 }
 
 .error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--danger);
   font-size: var(--text-sm);
   margin: 0;
+}
+
+.error svg,
+.error i {
+  flex-shrink: 0;
 }
 
 .center {
@@ -186,6 +194,9 @@ a {
 /* Buttons */
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-family: var(--font-body);
   font-weight: 600;
   font-size: var(--text-sm);
@@ -233,6 +244,9 @@ a {
 /* Fluent's text/"subtle" button — no underline, a plain label that lights
    up with a neutral wash on hover rather than reading as a hyperlink. */
 .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   background: none;
   border: none;
   color: var(--text-primary);
@@ -293,6 +307,57 @@ textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+/* Text input with a trailing icon button inside it (e.g. password
+   show/hide) — the input keeps its normal border/focus styling, the
+   button just sits inside the same box. */
+.input-with-action {
+  position: relative;
+  display: flex;
+}
+
+.input-with-action input {
+  flex: 1;
+  padding-right: 36px;
+}
+
+.input-action {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.input-action:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.input-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Status icon — a large glyph above a card heading, e.g. a "check your
+   email" or "password reset" confirmation state. */
+.status-icon {
+  align-self: flex-start;
+}
+
+.status-icon-success {
+  color: var(--success);
 }
 
 /* Tables */
