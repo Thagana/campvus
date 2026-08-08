@@ -3,10 +3,9 @@ import { and, eq } from 'drizzle-orm'
 import { FastifyInstance } from 'fastify'
 import { Db } from '../db/client'
 import { courses, enrollments, user } from '../db/schema'
-import { getSchoolMembership, requireSchoolRole } from '../auth/guards'
-import { STAFF_ROLES } from '../auth/school-roles'
+import { getSchoolMembership, requireSchoolRole, STAFF_ROLES } from '../auth/guards'
 
-export function registerCourseRoutes (app: FastifyInstance, db: Db): void {
+export function registerCourseRoutes (app: FastifyInstance, db: Db): string {
   // schoolId is always the creating Teacher's own School — never a
   // client-supplied field (ADR-0005), so a Teacher can't stamp a Course
   // into a School they don't belong to.
@@ -42,15 +41,17 @@ export function registerCourseRoutes (app: FastifyInstance, db: Db): void {
       return reply.send(rows.map(r => ({ ...r, role: 'teacher' })))
     }
 
-    const rows = await db.select({ id: courses.id, name: courses.name, role: enrollments.role })
+    const rows = await db.select({ id: courses.id, name: courses.name })
       .from(enrollments)
       .innerJoin(courses, eq(enrollments.courseId, courses.id))
       .where(eq(enrollments.userId, membership.userId))
 
-    return reply.send(rows)
+    return reply.send(rows.map(r => ({ ...r, role: 'student' as const })))
   })
 
-  // Enrolls a School member as a Student in one specific Course. The
+  // Enrolls a School member as a Student in one specific Course — the only
+  // role Enrollment can grant (ADR-0005; Teacher comes from School
+  // membership, granted via the invite flow — see routes/school.ts). The
   // target must already belong to the same School as the Course (joining
   // the School itself happens via invitation — see auth/organization-hooks.ts
   // — not through this endpoint), distinctly from having no account at all.
@@ -92,10 +93,12 @@ export function registerCourseRoutes (app: FastifyInstance, db: Db): void {
       }
 
       await db.insert(enrollments).values({
-        id: crypto.randomUUID(), userId: student.id, courseId, role: 'student', createdAt: Date.now()
+        id: crypto.randomUUID(), userId: student.id, courseId, createdAt: Date.now()
       })
 
       return reply.code(201).send({ email, role: 'student' })
     }
   )
+
+  return '/courses'
 }

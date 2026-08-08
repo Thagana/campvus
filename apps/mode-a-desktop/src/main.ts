@@ -8,6 +8,7 @@ import { selectDesktopSeedingPolicy } from './seeding-policy-selection';
 import { configureAutoLaunch } from './auto-launch';
 import { getPaths } from './paths';
 import { loadConfigFile, saveConfigFile, mergeConfig, validateConfig, DesktopConfig, PartialDesktopConfig } from './config-store';
+import { nodeRequest, NodeResponse } from './node-request';
 import type { AppState, SaveConfigResult, LoginModeBArgs, LoginModeBResult } from './preload-api';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -169,9 +170,9 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
     return { ok: false, error: 'Campvus server URL must be a valid URL.' };
   }
 
-  let signInRes: Response;
+  let signInRes: NodeResponse;
   try {
-    signInRes = await fetch(new URL('api/auth/sign-in/email', base), {
+    signInRes = await nodeRequest(new URL('api/auth/sign-in/email', base), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email: args.email, password: args.password }),
@@ -187,12 +188,12 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
   if (!token) return { ok: false, error: 'Server did not return a session token (is it running the bearer auth plugin?).' };
   const headers = { Authorization: `Bearer ${token}` };
 
-  let publicKeyRes: Response;
-  let coursesRes: Response;
+  let publicKeyRes: NodeResponse;
+  let coursesRes: NodeResponse;
   try {
     [publicKeyRes, coursesRes] = await Promise.all([
-      fetch(new URL('public-key', base), { headers }),
-      fetch(new URL('courses', base), { headers }),
+      nodeRequest(new URL('public-key', base), { headers }),
+      nodeRequest(new URL('courses', base), { headers }),
     ]);
   } catch (err) {
     return { ok: false, error: `Signed in, but could not fetch account details: ${err instanceof Error ? err.message : String(err)}` };

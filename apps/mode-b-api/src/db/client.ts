@@ -99,7 +99,6 @@ CREATE TABLE IF NOT EXISTS enrollments (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES user(id),
   course_id TEXT NOT NULL REFERENCES courses(id),
-  role TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS enrollments_user_course_unique ON enrollments(user_id, course_id);

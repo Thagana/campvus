@@ -13,7 +13,7 @@ export function registerManifestRoutes (
   db: Db,
   paths: Paths,
   keypair: Keypair
-): void {
+): string {
   app.post<{ Params: { courseId: string } }>('/courses/:courseId/manifests', async (request, reply) => {
     const { courseId } = request.params
     const teacher = await requireCourseRole(db, request, reply, courseId, ['teacher'])
@@ -46,4 +46,9 @@ export function registerManifestRoutes (
     const manifests = loadRegistry(paths).filter(m => m.courseId === courseId)
     return reply.send(manifests)
   })
+
+  // Same '/courses/...' namespace routes/courses.ts registers under —
+  // both prefixes end up identical in server.ts's fallback list, which is
+  // fine (a Set, not a second hand-maintained array to keep in sync).
+  return '/courses'
 }

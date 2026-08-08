@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { listSchools, createSchool, School, ApiError } from '../api'
+import { listSchools, createSchool, getSchoolRoster, School, SchoolRoster, ApiError } from '../api'
 
 // Platform-admin section (routes/admin.ts, CAMPVUS_ADMIN_EMAILS allowlist).
 // The nav entry that opens this page is visible to every signed-in user
@@ -14,6 +14,10 @@ export default function AdminPage ({ onBack }: { onBack: () => void }) {
   const [founderEmail, setFounderEmail] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+
+  const [selectedSchool, setSelectedSchool] = useState<School | null>(null)
+  const [roster, setRoster] = useState<SchoolRoster | 'loading' | null>(null)
+  const [rosterError, setRosterError] = useState<string | null>(null)
 
   function refresh (): void {
     listSchools()
@@ -32,6 +36,18 @@ export default function AdminPage ({ onBack }: { onBack: () => void }) {
   }
 
   useEffect(refresh, [])
+
+  function viewRoster (school: School): void {
+    setSelectedSchool(school)
+    setRoster('loading')
+    setRosterError(null)
+    getSchoolRoster(school.id)
+      .then(setRoster)
+      .catch((err) => {
+        setRoster(null)
+        setRosterError(err instanceof Error ? err.message : 'something went wrong')
+      })
+  }
 
   async function handleCreate (e: FormEvent): Promise<void> {
     e.preventDefault()
@@ -65,15 +81,55 @@ export default function AdminPage ({ onBack }: { onBack: () => void }) {
             {schools !== 'loading' && schools.length === 0 && <p className="muted">No Schools yet — create one below.</p>}
             {schools !== 'loading' && schools.length > 0 && (
               <table>
-                <thead><tr><th>Name</th><th>Slug</th></tr></thead>
+                <thead><tr><th>Name</th><th>Slug</th><th /></tr></thead>
                 <tbody>
                   {schools.map((s) => (
-                    <tr key={s.id}><td>{s.name}</td><td>{s.slug}</td></tr>
+                    <tr key={s.id}>
+                      <td>{s.name}</td>
+                      <td>{s.slug}</td>
+                      <td><button className="btn btn-secondary" onClick={() => viewRoster(s)}>View</button></td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
             )}
           </section>
+
+          {selectedSchool && (
+            <section>
+              <span className="eyebrow">{selectedSchool.name}</span>
+              <h3>Members</h3>
+              {roster === 'loading' && <p className="muted">Loading…</p>}
+              {rosterError && <p className="error">{rosterError}</p>}
+              {roster && roster !== 'loading' && roster.members.length === 0 && <p className="muted">No members yet.</p>}
+              {roster && roster !== 'loading' && roster.members.length > 0 && (
+                <table>
+                  <thead><tr><th>Email</th><th>Role</th></tr></thead>
+                  <tbody>
+                    {roster.members.map((m) => (
+                      <tr key={m.userId}><td>{m.email}</td><td>{m.role}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <h3>Courses &amp; enrollment</h3>
+              {roster && roster !== 'loading' && roster.courses.length === 0 && <p className="muted">No courses yet.</p>}
+              {roster && roster !== 'loading' && roster.courses.length > 0 && (
+                <table>
+                  <thead><tr><th>Course</th><th>Enrolled students</th></tr></thead>
+                  <tbody>
+                    {roster.courses.map((c) => (
+                      <tr key={c.id}>
+                        <td>{c.name} <span className="muted">({c.id})</span></td>
+                        <td>{c.students.length === 0 ? <span className="muted">none</span> : c.students.join(', ')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          )}
 
           <section>
             <span className="eyebrow">New</span>

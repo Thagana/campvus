@@ -1,5 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { listManifests, uploadManifest, enrollUser, SignedManifest } from '../api'
+import { listManifests, uploadManifest, enrollStudent, getMySchool, SignedManifest, MySchool } from '../api'
+import { useAsyncForm } from '../hooks/useAsyncForm'
 
 export default function CourseDetailPage (
   { courseId, onBack }: { courseId: string, onBack: () => void }
@@ -9,15 +10,22 @@ export default function CourseDetailPage (
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [enrollEmail, setEnrollEmail] = useState('')
-  const [enrollRole, setEnrollRole] = useState<'student' | 'teacher'>('student')
-  const [enrolling, setEnrolling] = useState(false)
-  const [enrollMessage, setEnrollMessage] = useState<string | null>(null)
+  const { submitting: enrolling, message: enrollMessage, handleSubmit: submitEnroll } = useAsyncForm()
+
+  // Uploading (Teacher-only per-course, manifests.ts) and enrolling
+  // (Staff-only school-wide, courses.ts) are both actions a Student can
+  // never perform — a Teacher/Owner's school-wide role (ADR-0005) is
+  // enough to gate both, no separate per-course role check needed, since
+  // only Staff can do either regardless of which course they're on.
+  const [school, setSchool] = useState<MySchool | null>(null)
+  const isStaff = school !== null && school.role !== 'student'
 
   function refresh (): void {
     listManifests(courseId).then(setManifests).catch((err) => setError(err instanceof Error ? err.message : String(err)))
   }
 
   useEffect(refresh, [courseId])
+  useEffect(() => { getMySchool().then(setSchool).catch(() => {}) }, [])
 
   async function handleUpload (e: FormEvent): Promise<void> {
     e.preventDefault()
@@ -35,19 +43,13 @@ export default function CourseDetailPage (
     }
   }
 
-  async function handleEnroll (e: FormEvent): Promise<void> {
-    e.preventDefault()
-    setEnrollMessage(null)
-    setEnrolling(true)
-    try {
-      await enrollUser(courseId, enrollEmail, enrollRole)
-      setEnrollMessage(`Enrolled ${enrollEmail} as ${enrollRole}.`)
+  function handleEnroll (e: FormEvent): void {
+    void submitEnroll(e, async () => {
+      await enrollStudent(courseId, enrollEmail)
+      const enrolled = enrollEmail
       setEnrollEmail('')
-    } catch (err) {
-      setEnrollMessage(err instanceof Error ? err.message : 'something went wrong')
-    } finally {
-      setEnrolling(false)
-    }
+      return `Enrolled ${enrolled}.`
+    })
   }
 
   return (
@@ -59,14 +61,16 @@ export default function CourseDetailPage (
         <h2>{courseId}</h2>
       </section>
 
-      <section>
-        <h3>Upload course material</h3>
-        <form className="row" onSubmit={(e) => { void handleUpload(e) }}>
-          <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <button type="submit" className="btn btn-primary" disabled={!file || uploading}>{uploading ? 'Uploading…' : 'Upload'}</button>
-        </form>
-        {error && <p className="error">{error}</p>}
-      </section>
+      {isStaff && (
+        <section>
+          <h3>Upload course material</h3>
+          <form className="row" onSubmit={(e) => { void handleUpload(e) }}>
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <button type="submit" className="btn btn-primary" disabled={!file || uploading}>{uploading ? 'Uploading…' : 'Upload'}</button>
+          </form>
+          {error && <p className="error">{error}</p>}
+        </section>
+      )}
 
       <section>
         <h3>Files</h3>
@@ -89,25 +93,20 @@ export default function CourseDetailPage (
         )}
       </section>
 
-      <section>
-        <h3>Enroll someone</h3>
-        <p className="muted">They must already have an account (register first).</p>
-        <form className="row" onSubmit={(e) => { void handleEnroll(e) }}>
-          <label>
-            Email
-            <input type="email" required value={enrollEmail} onChange={(e) => setEnrollEmail(e.target.value)} />
-          </label>
-          <label>
-            Role
-            <select value={enrollRole} onChange={(e) => setEnrollRole(e.target.value as 'student' | 'teacher')}>
-              <option value="student">Student</option>
-              <option value="teacher">Teacher</option>
-            </select>
-          </label>
-          <button type="submit" className="btn btn-primary" disabled={enrolling}>{enrolling ? 'Enrolling…' : 'Enroll'}</button>
-        </form>
-        {enrollMessage && <p className="muted">{enrollMessage}</p>}
-      </section>
+      {isStaff && (
+        <section>
+          <h3>Enroll someone</h3>
+          <p className="muted">They must already be a member of your School — invite them from the courses page first if they aren't yet.</p>
+          <form className="row" onSubmit={handleEnroll}>
+            <label>
+              Email
+              <input type="email" required value={enrollEmail} onChange={(e) => setEnrollEmail(e.target.value)} />
+            </label>
+            <button type="submit" className="btn btn-primary" disabled={enrolling}>{enrolling ? 'Enrolling…' : 'Enroll'}</button>
+          </form>
+          {enrollMessage && <p className="muted">{enrollMessage}</p>}
+        </section>
+      )}
     </div>
   )
 }

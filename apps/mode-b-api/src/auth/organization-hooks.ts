@@ -1,43 +1,23 @@
-import { and, eq, inArray, ne } from 'drizzle-orm'
 import { Db } from '../db/client'
-import { member } from '../db/schema'
-import { GRANTABLE_ROLES, STAFF_ROLES } from './school-roles'
+import { getSchoolMembership, grantedRoleFrom, schoolWouldLoseItsLastTeacher, STAFF_ROLES } from './guards'
 
 type MemberSnapshot = { id: string, role: string, organizationId: string }
 
-// Note: for the Owner specifically, better-auth's own creatorRole
-// protection already blocks demoting/removing a School's sole Owner before
-// this even runs (it's the only member ever assigned 'owner', and that role
-// is never grantable elsewhere — see assertGrantableRole below — so the
-// Owner can never actually leave through these two actions). This function
-// still matters for a plain Teacher: it's what stops a School from being
-// left with zero Teacher/Owner members if the Owner were ever removed by
-// some future path.
-async function schoolWouldLoseItsLastTeacher (db: Db, organizationId: string, excludingMemberId: string): Promise<boolean> {
-  const remainingStaff = await db.select().from(member).where(and(
-    eq(member.organizationId, organizationId),
-    inArray(member.role, STAFF_ROLES),
-    ne(member.id, excludingMemberId)
-  ))
-  return remainingStaff.length === 0
-}
-
-// better-auth's own invite-member/update-member-role validation accepts its
-// built-in admin/member/owner role strings regardless of the custom `roles`
-// we configure (see auth/roles.ts) — it merges the two sets rather than
-// replacing them. These hooks close that gap and enforce the ADR-0005
-// invariants better-auth has no config option for: Owner is never granted
-// through a regular invite or role change, a person belongs to at most one
-// School, and a School can never end up with zero Teacher/Owner members.
+// Thin plugin-wiring shim: translates auth/guards.ts's ADR-0005
+// School-authorization rules into better-auth's own hook protocol
+// (its APIError, at the four points its invite-member/accept-invitation/
+// update-member-role/remove-member endpoints call out to). The actual
+// rules — what's grantable, what counts as staff, the last-Teacher
+// invariant — are owned by guards.ts, not repeated here.
 export async function buildOrganizationHooks (db: Db) {
   const { APIError } = await import('better-auth')
 
   function assertGrantableRole (roleString: string): string {
-    const roles = roleString.split(',').map(r => r.trim()).filter(Boolean)
-    if (roles.length !== 1 || !GRANTABLE_ROLES.has(roles[0])) {
+    const role = grantedRoleFrom(roleString)
+    if (!role) {
       throw new APIError('BAD_REQUEST', { message: 'only the teacher or student role may be granted' })
     }
-    return roles[0]
+    return role
   }
 
   return {
@@ -46,8 +26,8 @@ export async function buildOrganizationHooks (db: Db) {
     },
 
     async beforeAcceptInvitation ({ user }: { user: { id: string } }) {
-      const existing = await db.select().from(member).where(eq(member.userId, user.id)).limit(1)
-      if (existing[0]) {
+      const existing = await getSchoolMembership(db, user.id)
+      if (existing) {
         throw new APIError('BAD_REQUEST', { message: 'this account already belongs to a School' })
       }
     },

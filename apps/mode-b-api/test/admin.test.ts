@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { eq } from 'drizzle-orm'
-import { createTestApp, registerUser, withBrevoStandIn } from './helpers'
+import { createTestApp, registerUser, createSchoolWithOwner, inviteAndAccept, withBrevoStandIn } from './helpers'
 import { organization, invitation } from '../src/db/schema'
 import { WEB_URL } from '../src/config'
 
@@ -134,4 +134,39 @@ test('end to end: admin creates a School, founding Teacher registers and accepts
   // independent axes (auth/platform-admin.ts vs. School role).
   const list = await app.inject({ method: 'GET', url: '/admin/schools', headers: { cookie: founderCookie } })
   assert.equal(list.statusCode, 403)
+})
+
+test('a platform admin can see every member of a School and who is enrolled in each Course', async () => {
+  const { app, db } = await createTestApp()
+  const adminCookie = await registerUser(app, db, 'admin@campvus.example')
+
+  const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'colleague@riverside.edu', role: 'teacher' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  void studentCookie
+
+  await app.inject({ method: 'POST', url: '/courses', headers: { cookie: ownerCookie }, payload: { id: 'COMSCI214', name: 'Intro to CS' } })
+  await app.inject({ method: 'POST', url: '/courses/COMSCI214/enrollments', headers: { cookie: ownerCookie }, payload: { email: 'student@riverside.edu' } })
+
+  const res = await app.inject({ method: 'GET', url: `/admin/schools/${organizationId}/roster`, headers: { cookie: adminCookie } })
+  assert.equal(res.statusCode, 200)
+  const { members, courses } = res.json()
+
+  const emails = members.map((m: { email: string }) => m.email).sort()
+  assert.deepEqual(emails, ['colleague@riverside.edu', 'owner@riverside.edu', 'student@riverside.edu'])
+  assert.equal(members.find((m: { email: string }) => m.email === 'owner@riverside.edu').role, 'owner')
+  assert.equal(members.find((m: { email: string }) => m.email === 'colleague@riverside.edu').role, 'teacher')
+  assert.equal(members.find((m: { email: string }) => m.email === 'student@riverside.edu').role, 'student')
+
+  assert.equal(courses.length, 1)
+  assert.equal(courses[0].id, 'COMSCI214')
+  assert.deepEqual(courses[0].students, ['student@riverside.edu'])
+})
+
+test('a non-admin cannot view a School roster', async () => {
+  const { app, db } = await createTestApp()
+  const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+
+  const res = await app.inject({ method: 'GET', url: `/admin/schools/${organizationId}/roster`, headers: { cookie: ownerCookie } })
+  assert.equal(res.statusCode, 403)
 })

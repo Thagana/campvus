@@ -112,16 +112,14 @@ export const courses = sqliteTable('courses', {
   createdAt: integer('created_at').notNull()
 })
 
-// Only Students get a row here now (ADR-0005) — a Teacher's access to
-// every Course in their School comes from their School membership alone,
-// not from a per-course row. `role` is always 'student' going forward;
-// kept rather than dropped since removing it is a later cleanup, not
-// required by this pass.
+// Only Students get a row here (ADR-0005) — a Teacher's access to every
+// Course in their School comes from their School membership alone, not
+// from a per-course row. A row's mere existence means Student, so there's
+// no role column to carry.
 export const enrollments = sqliteTable('enrollments', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id),
   courseId: text('course_id').notNull().references(() => courses.id),
-  role: text('role').notNull(), // 'student'
   createdAt: integer('created_at').notNull()
 }, (t) => ({
   userCourseUnique: uniqueIndex('enrollments_user_course_unique').on(t.userId, t.courseId)

@@ -1,18 +1,35 @@
-// Request-level auth/authorization guards. `installRequestUser` wires
-// better-auth's session lookup -> `request.user` on every request.
-// `requireAuth` enforces "is anyone logged in"; `requireSchoolRole`
-// enforces "is this user a Teacher/Student of *some* School" (ADR-0005);
-// `requireCourseRole`/`accessibleCourseIds` enforce course-level access —
-// a Teacher's access is School-wide (their School membership alone, no
-// per-course row needed), a Student's is per-course (an `enrollments` row).
+// Everything answering "who can do what in a School" (ADR-0005) — the
+// single module both enforcement boundaries read from: the Fastify route
+// boundary (requireSchoolRole/requireCourseRole/accessibleCourseIds below)
+// and the better-auth plugin boundary (auth/organization-hooks.ts's thin
+// wrapper around grantedRoleFrom/schoolWouldLoseItsLastTeacher, and
+// auth/roles.ts's access-control role definitions). Previously split across
+// four independently-maintained files; consolidated here so a change to
+// "what counts as staff" or "what's grantable" has exactly one place to
+// make it. `installRequestUser` wires better-auth's session lookup ->
+// `request.user` on every request. `requireAuth` enforces "is anyone
+// logged in"; `requireSchoolRole` enforces "is this user a Teacher/Student
+// of *some* School"; `requireCourseRole`/`accessibleCourseIds` enforce
+// course-level access — a Teacher's access is School-wide (their School
+// membership alone, no per-course row needed), a Student's is per-course
+// (an `enrollments` row).
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { Db } from '../db/client'
 import { courses, enrollments, member } from '../db/schema'
-import { STAFF_ROLES } from './school-roles'
 import { isPlatformAdmin } from './platform-admin'
-import { AuthBundle } from './auth'
+import type { AuthBundle } from './auth'
+
+// Owner and Teacher share every permission (auth/roles.ts) and both count
+// as "staff" for School-wide Course access; Owner is distinguished only by
+// how it's assigned (auth/create-school.ts), never by what it can do.
+export const STAFF_ROLES = ['teacher', 'owner']
+
+// The only roles a regular invite or role change may grant — Owner is
+// seeded once per School (auth/create-school.ts) and never granted through
+// these paths.
+export const GRANTABLE_ROLES = new Set(['teacher', 'student'])
 
 export interface SessionUser {
   id: string
@@ -137,4 +154,35 @@ export async function accessibleCourseIds (db: Db, userId: string): Promise<stri
 
   const rows = await db.select({ courseId: enrollments.courseId }).from(enrollments).where(eq(enrollments.userId, userId))
   return rows.map(r => r.courseId)
+}
+
+// The two ADR-0005 invariants better-auth's own invite-member/
+// update-member-role validation has no config option for — it accepts its
+// built-in admin/member/owner role strings regardless of the custom
+// `roles` configured in auth/roles.ts (it merges the two sets rather than
+// replacing them). Pure validation lives here, framework-agnostic;
+// auth/organization-hooks.ts's thin shim decides how to fail in
+// better-auth's own hook protocol (throwing its APIError).
+
+// A better-auth role string is comma-joined and may carry more than one
+// role; only a single grantable role is ever valid here. Returns null
+// rather than throwing — this file has no opinion on how a caller signals
+// failure in its own protocol.
+export function grantedRoleFrom (roleString: string): string | null {
+  const roles = roleString.split(',').map(r => r.trim()).filter(Boolean)
+  if (roles.length !== 1 || !GRANTABLE_ROLES.has(roles[0])) return null
+  return roles[0]
+}
+
+export async function schoolWouldLoseItsLastTeacher (
+  db: Db,
+  organizationId: string,
+  excludingMemberId: string
+): Promise<boolean> {
+  const remainingStaff = await db.select().from(member).where(and(
+    eq(member.organizationId, organizationId),
+    inArray(member.role, STAFF_ROLES),
+    ne(member.id, excludingMemberId)
+  ))
+  return remainingStaff.length === 0
 }

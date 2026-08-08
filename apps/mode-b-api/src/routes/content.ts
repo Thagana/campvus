@@ -19,7 +19,7 @@ import { accessibleCourseIds, requireAuth } from '../auth/guards'
 // contentDir itself.
 const HASH_PATTERN = /^[0-9a-f]{64}$/
 
-export function registerContentRoutes (app: FastifyInstance, db: Db, paths: Paths): void {
+export function registerContentRoutes (app: FastifyInstance, db: Db, paths: Paths): string {
   app.get<{ Params: { hash: string } }>('/content/:hash', async (request, reply) => {
     const user = requireAuth(request, reply)
     if (!user) return
@@ -43,4 +43,6 @@ export function registerContentRoutes (app: FastifyInstance, db: Db, paths: Path
     reply.header('content-type', 'application/octet-stream')
     return reply.send(bytes)
   })
+
+  return '/content'
 }

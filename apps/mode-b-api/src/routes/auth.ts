@@ -6,7 +6,7 @@ import { AuthBundle } from '../auth/auth'
 // This is the documented Fastify integration pattern: Fastify has already
 // parsed a JSON body into `request.body` by the time this handler runs, so
 // it's re-serialized into a Fetch API `Request` for `auth.handler`.
-export function registerAuthRoutes (app: FastifyInstance, { auth, fromNodeHeaders }: AuthBundle): void {
+export function registerAuthRoutes (app: FastifyInstance, { auth, fromNodeHeaders }: AuthBundle): string {
   app.route({
     method: ['GET', 'POST'],
     url: '/api/auth/*',
@@ -32,4 +32,6 @@ export function registerAuthRoutes (app: FastifyInstance, { auth, fromNodeHeader
       return reply.send(response.body ? await response.text() : null)
     }
   })
+
+  return '/api/auth/'
 }

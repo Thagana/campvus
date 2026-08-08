@@ -23,7 +23,8 @@ export default defineConfig({
       '/api/auth': API_TARGET,
       '/courses': API_TARGET,
       '/content': API_TARGET,
-      '/admin': API_TARGET
+      '/admin': API_TARGET,
+      '/school': API_TARGET
     }
   }
 })
