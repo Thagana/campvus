@@ -19,14 +19,18 @@ const STATUS_LABELS: Record<AppState['status'], string> = {
 
 export function describeState (state: AppState): StatusView {
   const peerNoun = state.peerCount === 1 ? 'peer' : 'peers'
+  // Errors can surface with an empty message (e.g. a bare `new Error()`
+  // from a lower layer) — treat that the same as no message at all rather
+  // than rendering a red banner with nothing in it.
+  const errorMessage = state.errorMessage?.trim() || undefined
 
   return {
     statusLabel: STATUS_LABELS[state.status],
     statusDetail: state.status === 'error'
-      ? (state.errorMessage ?? 'Something went wrong')
+      ? (errorMessage ?? 'Something went wrong')
       : `${state.peerCount} ${peerNoun} connected`,
     peerCountLabel: String(state.peerCount),
     seedingLabel: state.seedingAllowed ? 'Allowed' : 'Paused (metered connection)',
-    errorMessage: state.status === 'error' ? state.errorMessage : undefined
+    errorMessage: state.status === 'error' ? errorMessage : undefined
   }
 }

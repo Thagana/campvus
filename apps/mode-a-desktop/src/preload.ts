@@ -1,6 +1,14 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
+// Captures errors in the preload script's own execution context (this app
+// never sets contextIsolation: false, so Electron's default true applies —
+// the documented pattern for that mode). Takes no DSN — renderer/preload
+// events relay to the main process over Sentry's own internal IPC channel,
+// separate from the campvus contextBridge channel below.
+import * as Sentry from '@sentry/electron/renderer'
+Sentry.init()
+
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 import type { AppState, CampvusApi } from './preload-api'
 

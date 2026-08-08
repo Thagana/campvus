@@ -10,19 +10,21 @@
         <span class="eyebrow">Campvus</span>
         <span class="header-actions">
           <span class="status-dot" id="status-dot" data-status="idle"></span>
-          <button type="button" class="btn-ghost" id="files-toggle" aria-current="false">Files</button>
-          <button type="button" class="btn-ghost settings-toggle" id="settings-toggle" aria-current="false">Settings</button>
+          <button type="button" class="btn-ghost" id="files-toggle" aria-current="false"><i class="ph ph-folder-simple" aria-hidden="true"></i> Files</button>
+          <button type="button" class="btn-ghost settings-toggle" id="settings-toggle" aria-current="false"><i class="ph ph-gear" aria-hidden="true"></i> Settings</button>
         </span>
       </header>
 
       <div class="panel-body">
       <section id="status-section">
         <section class="card status-card">
+          <i class="ph ph-pause-circle status-icon" id="status-icon" aria-hidden="true"></i>
           <h1 id="status-label">Idle</h1>
           <p class="muted" id="status-detail">0 peers connected</p>
         </section>
 
         <section class="error-banner" id="error-banner" hidden>
+          <i class="ph ph-warning-circle" aria-hidden="true"></i>
           <span id="error-message"></span>
         </section>
 
@@ -42,9 +44,9 @@
         <h2>Course files</h2>
         <p class="muted" id="files-empty">No files yet — check back once syncing finds some.</p>
         <div id="files-list"></div>
-        <p class="error" id="files-error" hidden></p>
+        <p class="error" id="files-error" hidden><i class="ph ph-warning-circle" aria-hidden="true"></i> <span id="files-error-text"></span></p>
         <div class="row">
-          <button type="button" class="btn btn-secondary" id="files-close">Close</button>
+          <button type="button" class="btn btn-secondary" id="files-close"><i class="ph ph-arrow-left" aria-hidden="true"></i> Close</button>
         </div>
       </section>
 
@@ -62,10 +64,15 @@
           </label>
           <label>
             Password
-            <input type="password" id="field-password" name="password" required />
+            <div class="input-with-action">
+              <input type="password" id="field-password" name="password" required />
+              <button type="button" class="input-action" id="password-toggle" aria-label="Show password">
+                <i class="ph ph-eye" id="password-toggle-icon" aria-hidden="true"></i>
+              </button>
+            </div>
           </label>
 
-          <p class="error" id="login-error" hidden></p>
+          <p class="error" id="login-error" hidden><i class="ph ph-warning-circle" aria-hidden="true"></i> <span id="login-error-text"></span></p>
           <p class="muted" id="login-status" hidden></p>
 
           <div class="row">
@@ -100,10 +107,10 @@
             <input type="text" id="field-maxStoreBytes" name="maxStoreBytes" placeholder="e.g. 5000000000" />
           </label>
 
-          <p class="error" id="settings-error" hidden></p>
+          <p class="error" id="settings-error" hidden><i class="ph ph-warning-circle" aria-hidden="true"></i> <span id="settings-error-text"></span></p>
 
           <div class="row">
-            <button type="submit" class="btn btn-primary" id="settings-save">Save</button>
+            <button type="submit" class="btn btn-primary" id="settings-save"><i class="ph ph-check" aria-hidden="true"></i> Save</button>
             <button type="button" class="btn btn-secondary" id="settings-cancel">Cancel</button>
           </div>
         </form>

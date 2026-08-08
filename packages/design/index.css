@@ -146,9 +146,17 @@ a {
 }
 
 .error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--danger);
   font-size: var(--text-sm);
   margin: 0;
+}
+
+.error svg,
+.error i {
+  flex-shrink: 0;
 }
 
 .center {
@@ -160,6 +168,18 @@ a {
 
 .spacer {
   flex: 1;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .row {
@@ -186,6 +206,9 @@ a {
 /* Buttons */
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-family: var(--font-body);
   font-weight: 600;
   font-size: var(--text-sm);
@@ -233,6 +256,9 @@ a {
 /* Fluent's text/"subtle" button — no underline, a plain label that lights
    up with a neutral wash on hover rather than reading as a hyperlink. */
 .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   background: none;
   border: none;
   color: var(--text-primary);
@@ -293,6 +319,57 @@ textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+/* Text input with a trailing icon button inside it (e.g. password
+   show/hide) — the input keeps its normal border/focus styling, the
+   button just sits inside the same box. */
+.input-with-action {
+  position: relative;
+  display: flex;
+}
+
+.input-with-action input {
+  flex: 1;
+  padding-right: 36px;
+}
+
+.input-action {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.input-action:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.input-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Status icon — a large glyph above a card heading, e.g. a "check your
+   email" or "password reset" confirmation state. */
+.status-icon {
+  align-self: flex-start;
+}
+
+.status-icon-success {
+  color: var(--success);
 }
 
 /* Tables */
@@ -369,4 +446,308 @@ tbody td {
 
 .elevated {
   box-shadow: var(--shadow-modal);
+}
+
+/* Sidebar nav — persistent left rail (mode-b-web's app shell) */
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  padding: var(--space-3) var(--space-2);
+  gap: var(--space-1);
+}
+
+.sidebar-nav__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-2) var(--space-4);
+}
+
+.sidebar-nav__brand strong {
+  font-family: var(--font-headline);
+  font-weight: 600;
+  font-size: var(--text-lg);
+}
+
+.sidebar-nav__section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-nav__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  text-decoration: none;
+  transition:
+    background-color var(--duration-fast) var(--ease-fluent),
+    color var(--duration-fast) var(--ease-fluent);
+}
+
+.sidebar-nav__link:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.sidebar-nav__link[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar-nav__footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+/* Modal */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  z-index: 100;
+}
+
+.modal {
+  background: var(--bg-primary);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-modal);
+  width: 420px;
+  max-width: 100%;
+  max-height: calc(100vh - var(--space-3) * 2);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Toast */
+
+.toast-region {
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 200;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-8);
+  padding: var(--space-2) var(--space-3);
+  min-width: 240px;
+  max-width: 360px;
+  font-size: var(--text-sm);
+}
+
+.toast-success {
+  border-left: 3px solid var(--success);
+}
+
+.toast-success svg {
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+.toast-error {
+  border-left: 3px solid var(--danger);
+}
+
+.toast-error svg {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+/* Empty state — icon + message (+ optional CTA) in place of bare text */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-12) var(--space-4);
+  color: var(--text-secondary);
+}
+
+.empty-state-icon {
+  color: var(--text-muted);
+}
+
+.empty-state h3 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+/* Loading state */
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  padding: var(--space-4) 0;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Breadcrumb */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.breadcrumb a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.breadcrumb a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: var(--text-muted);
+  display: flex;
+}
+
+.breadcrumb [aria-current='page'] {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Dropzone — drag-and-drop file target, used alongside a plain file input */
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-card);
+  padding: var(--space-6);
+  color: var(--text-secondary);
+  transition:
+    border-color var(--duration-fast) var(--ease-fluent),
+    background-color var(--duration-fast) var(--ease-fluent);
+}
+
+.dropzone-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Small square icon-only control — copy buttons, toast/modal close */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Leading-icon variant of .input-with-action/.input-action (which default
+   to a trailing action, e.g. password show/hide) — for a static icon like
+   a search field's magnifying glass on the left instead. */
+
+.input-with-action.leading input {
+  padding-left: 36px;
+  padding-right: 10px;
+}
+
+.input-with-action.leading .input-action {
+  left: 4px;
+  right: auto;
 }

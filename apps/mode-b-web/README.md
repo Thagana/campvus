@@ -1,8 +1,25 @@
 # @campvus/mode-b-web
 
 Mode B's teacher UI — login/register, create and manage courses, upload course files,
-enroll students. Talks to [`@campvus/mode-b-api`](../mode-b-api) over plain HTTP; no P2P
-here, so a browser app is sufficient (see the student client note below).
+enroll students, and (for platform admins) create schools and view their rosters. Talks to
+[`@campvus/mode-b-api`](../mode-b-api) over plain HTTP; no P2P here, so a browser app is
+sufficient (see the student client note below).
+
+## App structure
+
+- `src/router.tsx` — a small hand-rolled client-side router (History API + `popstate`, no
+  external router dependency). Routes: `/` (courses), `/course/:courseId`, `/platform-admin`
+  (schools list), `/platform-admin/schools/:schoolId` (roster). `App.tsx` reads
+  `/accept-invite` and `/reset-password` directly from `window.location` instead, since those
+  are always a fresh page load from an emailed link, never a client-side transition.
+- `src/pages/` — one component per route (`CoursesPage`, `CourseDetailPage`, `AdminPage`,
+  `SchoolRosterPage`, plus the two email-link pages above and `LoginPage`).
+  `AdminPage`/`SchoolRosterPage` are gated by the backend (`CAMPVUS_ADMIN_EMAILS` allowlist,
+  `routes/admin.ts` in `mode-b-api`), not by anything in the client session payload — a
+  non-admin just sees a clean "you don't have access" state rather than a broken screen.
+- `src/components/` — shared UI: `Sidebar`, `Modal`, `Toast`, `Dropzone`, `Breadcrumb`,
+  `EmptyState`, `Spinner`, `CopyButton`.
+- `src/hooks/useAsyncForm.ts` — shared submit/error/loading state for the app's forms.
 
 ## Setup
 

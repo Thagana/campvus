@@ -38,5 +38,13 @@
     "size": 34828,
     "timestamp": 1786194028198,
     "signature": "07500841133a3714ad88ee2c6a667b0a8fdb627492e49abc8bab5b8a572e4cb56d5003512f646ee4f8b2af36abc97ddd44183971e023a79df662747f68567201"
+  },
+  {
+    "courseId": "Agri_12",
+    "filename": "Football_Betting_Model.xlsx",
+    "hash": "29579ea7d54060153db9f01354b5919c8527c52292eff0613671a86860c32d40",
+    "size": 49299,
+    "timestamp": 1786219077331,
+    "signature": "b03c114ffa7929c6a607b216a2470e785728b8bb4bdaac3aca4ce2f6d84acd9d09e77dd4f587dcf4fc6256a9e645119208329d1738f62373692608ceec1dd60d"
   }
 ]

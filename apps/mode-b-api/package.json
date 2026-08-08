@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Mode B: the full-app backend — direct-upload API, auth/enrollment, and origin storage. We deploy this infra ourselves instead of watching an LMS.",
+  "license": "MIT",
   "scripts": {
     "start": "tsx --env-file-if-exists=.env src/index.ts",
     "dev": "tsx --env-file-if-exists=.env src/index.ts",

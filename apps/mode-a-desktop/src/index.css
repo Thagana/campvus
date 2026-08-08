@@ -100,7 +100,32 @@ body {
   margin: 0;
 }
 
+.status-card .status-icon {
+  display: block;
+  font-size: 28px;
+  margin-bottom: var(--space-2);
+  color: var(--text-muted);
+}
+
+.status-card .status-icon[data-status='syncing'] {
+  color: var(--accent);
+  animation: ring-spin 2.4s linear infinite;
+}
+
+.status-card .status-icon[data-status='error'] {
+  color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-card .status-icon[data-status='syncing'] {
+    animation: none;
+  }
+}
+
 .error-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   background: color-mix(in srgb, var(--danger) 12%, var(--bg-primary));
   color: var(--danger);
   border-radius: var(--radius-card);

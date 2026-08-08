@@ -37,10 +37,12 @@
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron-forge/plugin-vite": "^7.11.2",
     "@electron/fuses": "^1.8.0",
+    "@sentry/vite-plugin": "^5.4.0",
     "@types/electron-squirrel-startup": "^1.0.2",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "cross-env": "^7.0.3",
+    "dotenv": "^17.4.2",
     "electron": "^43.2.0",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
@@ -53,6 +55,8 @@
     "@campvus/design": "workspace:*",
     "@campvus/engine": "workspace:*",
     "@fontsource/poppins": "^5.3.0",
+    "@phosphor-icons/web": "^2.1.2",
+    "@sentry/electron": "^7.16.0",
     "electron-squirrel-startup": "^1.0.1"
   }
 }

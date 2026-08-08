@@ -2,6 +2,7 @@ import { app, BrowserWindow, Tray, nativeImage, ipcMain, shell } from 'electron'
 import path from 'node:path';
 import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
+import * as Sentry from '@sentry/electron/main';
 import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher, hasContent, SwarmNode } from '@campvus/engine';
 import { createAgent, AgentEngineEvents, Agent } from './agent';
 import { createWindowController } from './window-controller';
@@ -10,12 +11,17 @@ import { configureAutoLaunch } from './auto-launch';
 import { getPaths } from './paths';
 import { loadConfigFile, saveConfigFile, mergeConfig, validateConfig, DesktopConfig, PartialDesktopConfig } from './config-store';
 import { nodeRequest, NodeResponse } from './node-request';
+import { initMainObservability } from './observability';
 import type { AppState, SaveConfigResult, LoginModeBArgs, LoginModeBResult, CourseFile, OpenCourseFileResult } from './preload-api';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
 }
+
+// Before anything else that could throw — after Squirrel's own early-quit
+// concern above, which isn't Sentry's to delay or risk.
+initMainObservability();
 
 // ADR-0004: apps/mode-a-desktop seeds freely by default (network-aware
 // opt-out for a tethered/metered connection), not the Wi-Fi-only-by-default
@@ -77,6 +83,7 @@ function wireAgent (nextAgent: Agent): void {
     refreshTray();
     windowContents?.send('campvus:state-changed', getAppState());
   });
+  agent.onError((err) => { Sentry.captureException(err); });
 }
 
 // Builds the swarm node (or the unconfigured stand-in) for a given config
@@ -136,6 +143,7 @@ async function refreshModeBCourses (): Promise<void> {
     courseIds = await fetchModeBCourseIds(base, { Authorization: `Bearer ${currentConfig.modeBToken}` });
   } catch (err) {
     console.error('Mode B course refresh failed:', err instanceof Error ? err.message : String(err));
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { extra: { ipcHandler: 'refreshModeBCourses' } });
     return;
   }
   if (courseIds.length === 0 || sameCourseIds(courseIds, currentConfig.courseIds)) return;
@@ -152,7 +160,12 @@ async function refreshModeBCourses (): Promise<void> {
 function startCourseRefreshTimer (config: DesktopConfig): void {
   if (courseRefreshTimer) clearInterval(courseRefreshTimer);
   courseRefreshTimer = config.modeBToken
-    ? setInterval(() => { refreshModeBCourses().catch((err) => console.error('Mode B course refresh failed:', err)); }, COURSE_REFRESH_INTERVAL_MS)
+    ? setInterval(() => {
+      refreshModeBCourses().catch((err) => {
+        console.error('Mode B course refresh failed:', err);
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { extra: { ipcHandler: 'startCourseRefreshTimer' } });
+      });
+    }, COURSE_REFRESH_INTERVAL_MS)
     : undefined;
 }
 
@@ -244,6 +257,9 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
       body: JSON.stringify({ email: args.email, password: args.password }),
     });
   } catch (err) {
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+      extra: { ipcHandler: 'campvus:login-mode-b', step: 'sign-in-request', modeBUrl: trimmedUrl },
+    });
     return { ok: false, error: `Could not reach ${trimmedUrl}: ${err instanceof Error ? err.message : String(err)}` };
   }
   if (!signInRes.ok) {
@@ -262,6 +278,9 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
       fetchModeBCourseIds(base, headers),
     ]);
   } catch (err) {
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+      extra: { ipcHandler: 'campvus:login-mode-b', step: 'fetch-account-details', modeBUrl: trimmedUrl },
+    });
     return { ok: false, error: `Signed in, but could not fetch account details: ${err instanceof Error ? err.message : String(err)}` };
   }
   if (!publicKeyRes.ok) return { ok: false, error: 'Signed in, but could not fetch the institution public key.' };
@@ -466,6 +485,19 @@ const createMainWindow = (): { show(): void } => {
 
   windowContents = mainWindow.webContents;
 
+  // Not covered by any default Sentry integration (no Error object exists
+  // for either event) — genuinely needs manual wiring, unlike uncaught
+  // exceptions/unhandled rejections, which Sentry.init already captures.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    Sentry.captureMessage(`Renderer process gone: ${details.reason}`, {
+      level: 'fatal',
+      extra: { reason: details.reason, exitCode: details.exitCode },
+    });
+  });
+  mainWindow.webContents.on('unresponsive', () => {
+    Sentry.captureMessage('Renderer process became unresponsive', { level: 'warning' });
+  });
+
   // window-controller.ts caches this window and reuses it across tray
   // clicks (ADR-0003) — destroying it on close would leave that cache
   // pointing at a dead BrowserWindow, so hide instead.
@@ -508,7 +540,10 @@ app.on('ready', () => {
   // Errors are already routed to the tray via agent.onError (see
   // createAgent above) — this catch only stops the rejection from being
   // unhandled.
-  swarmNode?.start().catch((err) => console.error('Failed to start swarm engine:', err));
+  swarmNode?.start().catch((err) => {
+    console.error('Failed to start swarm engine:', err);
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { extra: { phase: 'swarm-start' } });
+  });
 });
 
 app.on('window-all-closed', () => {

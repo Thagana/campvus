@@ -5,9 +5,17 @@
  * engine state itself.
  */
 
+// Auto-installs GlobalHandlers (window.onerror + unhandledrejection) by
+// default — do not hand-roll those, it would double-capture. Takes no DSN;
+// events relay to the main process, which is the only place SENTRY_DSN is
+// read (see observability.ts).
+import * as Sentry from '@sentry/electron/renderer';
+Sentry.init();
+
 import '@fontsource/poppins/latin-400.css';
 import '@fontsource/poppins/latin-500.css';
 import '@fontsource/poppins/latin-600.css';
+import '@phosphor-icons/web/regular/style.css';
 import '@campvus/design/index.css';
 import './index.css';
 import { describeState } from './status-view';
@@ -15,6 +23,7 @@ import { groupCourseFiles } from './course-files-view';
 import type { AppState, CourseFile, PartialDesktopConfig } from './preload-api';
 
 const statusDot = document.getElementById('status-dot') as HTMLElement;
+const statusIcon = document.getElementById('status-icon') as HTMLElement;
 const statusLabel = document.getElementById('status-label') as HTMLElement;
 const statusDetail = document.getElementById('status-detail') as HTMLElement;
 const peerCount = document.getElementById('peer-count') as HTMLElement;
@@ -22,12 +31,22 @@ const seedingValue = document.getElementById('seeding-value') as HTMLElement;
 const errorBanner = document.getElementById('error-banner') as HTMLElement;
 const errorMessage = document.getElementById('error-message') as HTMLElement;
 
+// Phosphor's regular-weight class per state — swapped onto #status-icon
+// alongside the existing status-dot's data-status, rather than a second
+// state map, since it's a 1:1 lookup used in exactly one place.
+const STATUS_ICON_CLASS: Record<AppState['status'], string> = {
+  idle: 'ph-pause-circle',
+  syncing: 'ph-arrows-clockwise',
+  error: 'ph-warning-circle'
+};
+
 const statusSection = document.getElementById('status-section') as HTMLElement;
 const settingsSection = document.getElementById('settings-section') as HTMLElement;
 const settingsToggle = document.getElementById('settings-toggle') as HTMLButtonElement;
 const settingsCancel = document.getElementById('settings-cancel') as HTMLButtonElement;
 const settingsForm = document.getElementById('settings-form') as HTMLFormElement;
 const settingsError = document.getElementById('settings-error') as HTMLElement;
+const settingsErrorText = document.getElementById('settings-error-text') as HTMLElement;
 
 const filesSection = document.getElementById('files-section') as HTMLElement;
 const filesToggle = document.getElementById('files-toggle') as HTMLButtonElement;
@@ -35,11 +54,16 @@ const filesClose = document.getElementById('files-close') as HTMLButtonElement;
 const filesList = document.getElementById('files-list') as HTMLElement;
 const filesEmpty = document.getElementById('files-empty') as HTMLElement;
 const filesError = document.getElementById('files-error') as HTMLElement;
+const filesErrorText = document.getElementById('files-error-text') as HTMLElement;
 
 const loginForm = document.getElementById('login-form') as HTMLFormElement;
 const loginSubmit = document.getElementById('login-submit') as HTMLButtonElement;
 const loginError = document.getElementById('login-error') as HTMLElement;
+const loginErrorText = document.getElementById('login-error-text') as HTMLElement;
 const loginStatus = document.getElementById('login-status') as HTMLElement;
+const passwordField = document.getElementById('field-password') as HTMLInputElement;
+const passwordToggle = document.getElementById('password-toggle') as HTMLButtonElement;
+const passwordToggleIcon = document.getElementById('password-toggle-icon') as HTMLElement;
 
 let latestState: AppState | undefined;
 
@@ -48,6 +72,8 @@ function render(state: AppState): void {
   const view = describeState(state);
 
   statusDot.dataset.status = state.status;
+  statusIcon.className = `ph ${STATUS_ICON_CLASS[state.status]} status-icon`;
+  statusIcon.dataset.status = state.status;
   statusLabel.textContent = view.statusLabel;
   statusDetail.textContent = view.statusDetail;
   peerCount.textContent = view.peerCountLabel;
@@ -99,6 +125,13 @@ function readForm (): PartialDesktopConfig {
   };
 }
 
+passwordToggle.addEventListener('click', () => {
+  const showing = passwordField.type === 'text';
+  passwordField.type = showing ? 'password' : 'text';
+  passwordToggleIcon.className = showing ? 'ph ph-eye' : 'ph ph-eye-slash';
+  passwordToggle.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+});
+
 settingsToggle.addEventListener('click', async () => {
   settingsError.hidden = true;
   populateForm(await window.campvus.getConfig());
@@ -118,7 +151,7 @@ settingsForm.addEventListener('submit', async (event) => {
 
   const result = await window.campvus.saveConfig(readForm());
   if (!result.ok) {
-    settingsError.textContent = result.errors?.map((e) => e.message).join(' ') ?? 'Could not save settings.';
+    settingsErrorText.textContent = result.errors?.map((e) => e.message).join(' ') ?? 'Could not save settings.';
     settingsError.hidden = false;
     return;
   }
@@ -143,7 +176,7 @@ loginForm.addEventListener('submit', async (event) => {
 
     if (!result.ok) {
       loginStatus.hidden = true;
-      loginError.textContent = result.error;
+      loginErrorText.textContent = result.error;
       loginError.hidden = false;
       return;
     }
@@ -187,7 +220,7 @@ function renderFiles (files: CourseFile[]): void {
         const result = await window.campvus.openCourseFile(file.hash);
         action.disabled = !file.canOpen;
         if (!result.ok) {
-          filesError.textContent = result.error ?? 'Could not open this file.';
+          filesErrorText.textContent = result.error ?? 'Could not open this file.';
           filesError.hidden = false;
         }
       });

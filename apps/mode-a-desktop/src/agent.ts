@@ -26,6 +26,12 @@ export interface Agent {
   // via getState() on open and this notifies it (and the tray) of updates
   // while it's around.
   onStateChange (handler: (state: AgentState) => void): void
+  // Fires exactly once per underlying engine error (unlike onStateChange,
+  // which also re-fires on every subsequent state change while still in
+  // the error state) — main.ts's wireAgent uses this to report to Sentry
+  // without needing its own de-dup logic, and it carries the real Error
+  // with its stack trace intact rather than a stringified message.
+  onError (handler: (err: Error) => void): void
 }
 
 export function createAgent (engine: AgentEngineEvents): Agent {
@@ -33,6 +39,7 @@ export function createAgent (engine: AgentEngineEvents): Agent {
   let peerCount = 0
   let lastError: Error | undefined
   const listeners: Array<(state: AgentState) => void> = []
+  const errorListeners: Array<(err: Error) => void> = []
 
   const getState = (): AgentState => ({
     status,
@@ -47,12 +54,18 @@ export function createAgent (engine: AgentEngineEvents): Agent {
 
   engine.onSyncStart(() => { status = 'syncing'; notify() })
   engine.onSyncEnd(() => { status = 'idle'; notify() })
-  engine.onError((err) => { status = 'error'; lastError = err; notify() })
+  engine.onError((err) => {
+    status = 'error'
+    lastError = err
+    notify()
+    for (const listener of errorListeners) listener(err)
+  })
   engine.onPeerCountChange((count) => { peerCount = count; notify() })
 
   return {
     getState,
     onStateChange: (handler) => { listeners.push(handler) },
+    onError: (handler) => { errorListeners.push(handler) },
     getTrayDescription: () => ({
       status,
       tooltip: status === 'error'

@@ -44,6 +44,14 @@ test('error state without a message falls back to a generic detail', () => {
   const view = describeState({ ...baseState, status: 'error' })
 
   assert.equal(view.statusDetail, 'Something went wrong')
+  assert.equal(view.errorMessage, undefined)
+})
+
+test('error state with an empty message is treated as no message', () => {
+  const view = describeState({ ...baseState, status: 'error', errorMessage: '' })
+
+  assert.equal(view.statusDetail, 'Something went wrong')
+  assert.equal(view.errorMessage, undefined)
 })
 
 test('seeding allowed is labeled "Allowed"', () => {
