@@ -37,7 +37,17 @@ jobs:
 
       - run: pnpm --filter campvus-p2p run typecheck
       - run: pnpm --filter campvus-p2p run test
+
+      # Bakes SENTRY_DSN into the bundled main.js and uploads sourcemaps for
+      # symbolicated stack traces — no-ops cleanly (no Sentry.init, no
+      # sourcemap upload) when these resolve empty, e.g. on a forked PR
+      # where GitHub doesn't expose secrets.
       - run: pnpm --filter campvus-p2p run make
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
 
       - uses: actions/upload-artifact@v4
         with:

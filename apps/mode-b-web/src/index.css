@@ -1,10 +1,41 @@
 /* Page-specific layout only — tokens, resets, and shared components
-   (buttons, cards, inputs, tables, topbar) come from @campvus/design. */
+   (buttons, cards, inputs, tables, sidebar nav, modal, toast) come from
+   @campvus/design. */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-shell > main {
+  flex: 1;
+  min-width: 0;
+}
 
 main {
   max-width: var(--content-app);
   margin: 0 auto;
   padding: var(--space-3);
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.courses-toolbar {
+  margin-bottom: var(--space-3);
+  max-width: 320px;
+}
+
+.file-table-hash {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .login-card {

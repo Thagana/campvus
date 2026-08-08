@@ -1,16 +1,25 @@
 import { useEffect, useState, FormEvent } from 'react'
+import { Files, UploadSimple, UserPlus } from '@phosphor-icons/react'
 import { listManifests, uploadManifest, enrollStudent, getMySchool, SignedManifest, MySchool } from '../api'
 import { useAsyncForm } from '../hooks/useAsyncForm'
+import { useToast } from '../components/Toast'
+import { Modal } from '../components/Modal'
+import { EmptyState } from '../components/EmptyState'
+import { Spinner } from '../components/Spinner'
+import { Breadcrumb } from '../components/Breadcrumb'
+import { CopyButton } from '../components/CopyButton'
+import { Dropzone } from '../components/Dropzone'
 
-export default function CourseDetailPage (
-  { courseId, onBack }: { courseId: string, onBack: () => void }
-) {
+export default function CourseDetailPage ({ courseId }: { courseId: string }) {
+  const { showSuccess } = useToast()
   const [manifests, setManifests] = useState<SignedManifest[] | 'loading'>('loading')
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
+  const { submitting: uploading, error: uploadError, handleSubmit: submitUpload } = useAsyncForm()
+
+  const [enrollOpen, setEnrollOpen] = useState(false)
   const [enrollEmail, setEnrollEmail] = useState('')
-  const { submitting: enrolling, message: enrollMessage, handleSubmit: submitEnroll } = useAsyncForm()
+  const { submitting: enrolling, error: enrollError, handleSubmit: submitEnroll } = useAsyncForm()
 
   // Uploading (Teacher-only per-course, manifests.ts) and enrolling
   // (Staff-only school-wide, courses.ts) are both actions a Student can
@@ -21,61 +30,75 @@ export default function CourseDetailPage (
   const isStaff = school !== null && school.role !== 'student'
 
   function refresh (): void {
-    listManifests(courseId).then(setManifests).catch((err) => setError(err instanceof Error ? err.message : String(err)))
+    listManifests(courseId).then(setManifests).catch((err) => setLoadError(err instanceof Error ? err.message : String(err)))
   }
 
   useEffect(refresh, [courseId])
   useEffect(() => { getMySchool().then(setSchool).catch(() => {}) }, [])
 
-  async function handleUpload (e: FormEvent): Promise<void> {
-    e.preventDefault()
+  function handleUpload (e: FormEvent): void {
     if (!file) return
-    setError(null)
-    setUploading(true)
-    try {
+    const uploadedName = file.name
+    void submitUpload(e, async () => {
       await uploadManifest(courseId, file)
+      showSuccess(`Uploaded ${uploadedName}.`)
       setFile(null)
       refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'something went wrong')
-    } finally {
-      setUploading(false)
-    }
+    })
   }
 
   function handleEnroll (e: FormEvent): void {
     void submitEnroll(e, async () => {
       await enrollStudent(courseId, enrollEmail)
-      const enrolled = enrollEmail
+      showSuccess(`Enrolled ${enrollEmail}.`)
       setEnrollEmail('')
-      return `Enrolled ${enrolled}.`
+      setEnrollOpen(false)
     })
   }
 
   return (
     <div>
-      <button className="btn btn-ghost" onClick={onBack}>&larr; Back to courses</button>
+      <Breadcrumb items={[{ label: 'Courses', to: '/' }, { label: courseId }]} />
 
       <section>
-        <span className="eyebrow">Course</span>
-        <h2>{courseId}</h2>
+        <div className="page-header">
+          <div>
+            <span className="eyebrow">Course</span>
+            <h2>{courseId}</h2>
+          </div>
+        </div>
       </section>
 
       {isStaff && (
         <section>
           <h3>Upload course material</h3>
-          <form className="row" onSubmit={(e) => { void handleUpload(e) }}>
-            <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <form onSubmit={handleUpload}>
+            <Dropzone onFile={setFile}>
+              <UploadSimple size={24} />
+              <p>Drag a file here, or choose one below.</p>
+              <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            </Dropzone>
+            {file && <p className="muted">Selected: {file.name}</p>}
+            {uploadError && <p className="error">{uploadError}</p>}
             <button type="submit" className="btn btn-primary" disabled={!file || uploading}>{uploading ? 'Uploading…' : 'Upload'}</button>
           </form>
-          {error && <p className="error">{error}</p>}
         </section>
       )}
 
       <section>
-        <h3>Files</h3>
-        {manifests === 'loading' && <p className="muted">Loading…</p>}
-        {manifests !== 'loading' && manifests.length === 0 && <p className="muted">No files uploaded yet.</p>}
+        <div className="page-header">
+          <h3>Files</h3>
+          {isStaff && (
+            <button type="button" className="btn btn-secondary" onClick={() => setEnrollOpen(true)}>
+              <UserPlus /> Enroll someone
+            </button>
+          )}
+        </div>
+        {manifests === 'loading' && <Spinner label="Loading files…" />}
+        {loadError && <p className="error">{loadError}</p>}
+        {manifests !== 'loading' && manifests.length === 0 && (
+          <EmptyState icon={<Files size={32} />} title="No files uploaded yet" message={isStaff ? 'Upload course material above to get started.' : undefined} />
+        )}
         {manifests !== 'loading' && manifests.length > 0 && (
           <table>
             <thead><tr><th>Filename</th><th>Size</th><th>Uploaded</th><th>Hash</th></tr></thead>
@@ -85,7 +108,12 @@ export default function CourseDetailPage (
                   <td>{m.filename}</td>
                   <td>{m.size} bytes</td>
                   <td>{new Date(m.timestamp).toLocaleString()}</td>
-                  <td title={m.hash}>{m.hash.slice(0, 12)}…</td>
+                  <td>
+                    <span className="file-table-hash">
+                      <span title={m.hash}>{m.hash.slice(0, 12)}…</span>
+                      <CopyButton value={m.hash} label="Copy full hash" />
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -93,20 +121,17 @@ export default function CourseDetailPage (
         )}
       </section>
 
-      {isStaff && (
-        <section>
-          <h3>Enroll someone</h3>
+      <Modal open={enrollOpen} onClose={() => setEnrollOpen(false)} title="Enroll someone">
+        <form onSubmit={handleEnroll} className="modal-form">
           <p className="muted">They must already be a member of your School — invite them from the courses page first if they aren't yet.</p>
-          <form className="row" onSubmit={handleEnroll}>
-            <label>
-              Email
-              <input type="email" required value={enrollEmail} onChange={(e) => setEnrollEmail(e.target.value)} />
-            </label>
-            <button type="submit" className="btn btn-primary" disabled={enrolling}>{enrolling ? 'Enrolling…' : 'Enroll'}</button>
-          </form>
-          {enrollMessage && <p className="muted">{enrollMessage}</p>}
-        </section>
-      )}
+          <label>
+            Email
+            <input type="email" required autoFocus value={enrollEmail} onChange={(e) => setEnrollEmail(e.target.value)} />
+          </label>
+          {enrollError && <p className="error">{enrollError}</p>}
+          <button type="submit" className="btn btn-primary" disabled={enrolling}>{enrolling ? 'Enrolling…' : 'Enroll'}</button>
+        </form>
+      </Modal>
     </div>
   )
 }

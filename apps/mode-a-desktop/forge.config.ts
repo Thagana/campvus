@@ -65,6 +65,11 @@ async function copyDependencyClosure (rootDir: string, destNodeModules: string, 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    // electron-packager names the app binary after `productName` ("campvus"),
+    // but the Linux deb/rpm installers (electron-installer-debian/-redhat)
+    // look for a binary matching package.json's `name` ("campvus-p2p") —
+    // without this they fail with "could not find the Electron app binary".
+    executableName: 'campvus-p2p',
     afterCopy: [
       async (buildPath, _electronVersion, _platform, _arch, callback) => {
         // `buildPath` here is `<staging>/resources/app` — the flat

@@ -88,3 +88,27 @@ test('onStateChange is not called before any engine event fires', () => {
 
   assert.equal(calls, 0)
 })
+
+test('onError notifies subscribers with the original Error object', () => {
+  const engine = new FakeEngineEvents()
+  const agent = createAgent(engine)
+  let captured: Error | undefined
+  agent.onError((err) => { captured = err })
+
+  const boom = new Error('boom')
+  engine.emitError(boom)
+
+  assert.equal(captured, boom)
+})
+
+test('onError is not called before the engine signals an error', () => {
+  const engine = new FakeEngineEvents()
+  const agent = createAgent(engine)
+  let calls = 0
+  agent.onError(() => { calls++ })
+
+  engine.emitSyncStart()
+  engine.emitPeerCountChange(2)
+
+  assert.equal(calls, 0)
+})

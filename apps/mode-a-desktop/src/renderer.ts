@@ -5,6 +5,13 @@
  * engine state itself.
  */
 
+// Auto-installs GlobalHandlers (window.onerror + unhandledrejection) by
+// default — do not hand-roll those, it would double-capture. Takes no DSN;
+// events relay to the main process, which is the only place SENTRY_DSN is
+// read (see observability.ts).
+import * as Sentry from '@sentry/electron/renderer';
+Sentry.init();
+
 import '@fontsource/poppins/latin-400.css';
 import '@fontsource/poppins/latin-500.css';
 import '@fontsource/poppins/latin-600.css';
