@@ -62,6 +62,40 @@ async function copyDependencyClosure (rootDir: string, destNodeModules: string, 
   await Promise.all(names.map((name) => copyOne(name, rootDir, false)));
 }
 
+// hyperswarm's dependency tree (udx-native, sodium-native, ...) ships
+// prebuildify-style `prebuilds/<platform>-<arch>/*.node` binaries for every
+// platform it supports, but copyDependencyClosure above copies each
+// package's directory wholesale. Each CI job only packages for its own host
+// platform/arch, so the other prebuilds are dead weight — and on Linux,
+// rpmbuild's auto-strip pass chokes trying to strip foreign-format binaries
+// (e.g. android-arm) it doesn't recognize, failing the whole rpm build.
+async function pruneForeignPrebuilds (destNodeModules: string, platform: string, arch: string): Promise<void> {
+  const keep = `${platform}-${arch}`;
+  async function walk (dir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    await Promise.all(entries.map(async (entry) => {
+      if (!entry.isDirectory()) return;
+      const full = path.join(dir, entry.name);
+      if (entry.name === 'prebuilds') {
+        const variants = await fs.readdir(full);
+        await Promise.all(
+          variants
+            .filter((variant) => variant !== keep)
+            .map((variant) => fs.rm(path.join(full, variant), { recursive: true, force: true }))
+        );
+        return;
+      }
+      await walk(full);
+    }));
+  }
+  await walk(destNodeModules);
+}
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
@@ -90,9 +124,11 @@ const config: ForgeConfig = {
           callback();
         }
       },
-      async (buildPath, _electronVersion, _platform, _arch, callback) => {
+      async (buildPath, _electronVersion, platform, arch, callback) => {
         try {
-          await copyDependencyClosure(__dirname, path.join(buildPath, 'node_modules'), ['hyperswarm']);
+          const destNodeModules = path.join(buildPath, 'node_modules');
+          await copyDependencyClosure(__dirname, destNodeModules, ['hyperswarm']);
+          await pruneForeignPrebuilds(destNodeModules, platform, arch);
           callback();
         } catch (err) {
           callback(err as Error);
