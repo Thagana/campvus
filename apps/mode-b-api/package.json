@@ -7,7 +7,7 @@
     "start": "tsx --env-file-if-exists=.env src/index.ts",
     "dev": "tsx --env-file-if-exists=.env src/index.ts",
     "create-school": "tsx --env-file-if-exists=.env src/scripts/create-school.ts",
-    "test": "tsx --test test/*.test.ts",
+    "test": "tsx --env-file-if-exists=.env --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -16,7 +16,8 @@
     "@fastify/static": "^10.1.2",
     "better-auth": "^1.6.25",
     "drizzle-orm": "^0.45.2",
-    "fastify": "^5.10.0"
+    "fastify": "^5.10.0",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

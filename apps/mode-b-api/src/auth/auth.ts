@@ -34,7 +34,7 @@ export async function createAuth (db: Db, secret: string) {
   const auth = betterAuth({
     secret,
     database: drizzleAdapter(db, {
-      provider: 'sqlite',
+      provider: 'pg',
       schema: { user, session, account, verification, organization, member, invitation }
     }),
     emailAndPassword: {

@@ -3,7 +3,6 @@
 // separate so tests can call that function directly without shelling out
 // to this script.
 import { openDb } from '../db/client'
-import { getDbPath } from '../paths'
 import { createSchool } from '../auth/create-school'
 
 async function main (): Promise<void> {
@@ -13,14 +12,17 @@ async function main (): Promise<void> {
     process.exit(1)
   }
 
-  const { db, close } = openDb(getDbPath())
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) throw new Error('DATABASE_URL is required (Postgres connection string)')
+
+  const { db, close } = await openDb(databaseUrl)
   try {
     const result = await createSchool(db, { name, founderEmail, slug })
     console.log(`School "${name}" created (id: ${result.organizationId}).`)
     console.log(`Founding Owner invitation created for ${founderEmail} (invitation id: ${result.invitationId}).`)
     console.log('They can accept it after signing up or signing in with that email.')
   } finally {
-    close()
+    await close()
   }
 }
 

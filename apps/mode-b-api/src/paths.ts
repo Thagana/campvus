@@ -1,9 +1,10 @@
 // This app's @campvus/engine runtime state (registry.json,
 // institution-keys.json, content-store/) lives alongside its own code —
 // same pattern as apps/mode-a-headless's paths.ts. Mode B additionally has
-// its own SQLite data file (data/app.db) for accounts/course
-// rosters/sessions, which isn't part of @campvus/engine's Paths at all —
-// that's Mode B-specific state, not engine state.
+// its own Postgres database (accounts/course rosters/sessions, connected
+// via the DATABASE_URL env var — see db/client.ts), which isn't part of
+// @campvus/engine's Paths at all — that's Mode B-specific state, not
+// engine state.
 
 import fs from 'fs'
 import path from 'path'
@@ -22,12 +23,6 @@ const DATA_ROOT = process.env.DATA_DIR || APP_ROOT
 
 export function getPaths (): Paths {
   return resolvePaths(DATA_ROOT)
-}
-
-export function getDbPath (): string {
-  const dir = path.join(DATA_ROOT, 'data')
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  return path.join(dir, 'app.db')
 }
 
 // Unlike Mode A (a manual `identity.ts generate` CLI step), a server

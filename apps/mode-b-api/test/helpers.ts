@@ -4,6 +4,8 @@ import os from 'os'
 import crypto from 'crypto'
 import http from 'http'
 import type { AddressInfo } from 'net'
+import { after } from 'node:test'
+import postgres from 'postgres'
 import { FastifyInstance } from 'fastify'
 import { eq } from 'drizzle-orm'
 import { resolvePaths, Paths, generateAndSaveKeypair, loadKeypair } from '@campvus/engine'
@@ -17,11 +19,55 @@ export function tmpPaths (): Paths {
   return resolvePaths(rootDir)
 }
 
+// Each createTestApp() call previously got a brand-new isolated `:memory:`
+// SQLite database — no cross-test collisions on ids like course "COMSCI214"
+// or emails like "teacher@riverside.edu" that repeat across test files.
+// Postgres has no in-memory equivalent, so instead each call CREATE
+// DATABASEs a fresh, uniquely-named database on TEST_DATABASE_URL's server
+// and tears it down once this test file's suite finishes (registered below
+// via node:test's `after`, since none of the test files themselves call a
+// teardown hook). TEST_DATABASE_URL must point at a disposable Postgres
+// instance you control — never the production DATABASE_URL.
+const pendingCleanup: Array<() => Promise<void>> = []
+
+after(async () => {
+  for (const cleanup of pendingCleanup) await cleanup()
+})
+
+async function createEphemeralDb (): Promise<Db> {
+  const baseUrl = process.env.TEST_DATABASE_URL
+  if (!baseUrl) {
+    throw new Error(
+      'TEST_DATABASE_URL is required to run tests — point it at a disposable Postgres ' +
+      'instance (e.g. a local Docker container). It must not be the production DATABASE_URL: ' +
+      'tests create and drop real databases on it.'
+    )
+  }
+
+  const dbName = `mode_b_test_${crypto.randomBytes(8).toString('hex')}`
+  const admin = postgres(baseUrl, { max: 1 })
+  await admin.unsafe(`CREATE DATABASE "${dbName}"`)
+  await admin.end()
+
+  const url = new URL(baseUrl)
+  url.pathname = `/${dbName}`
+  const { db, close } = await openDb(url.toString())
+
+  pendingCleanup.push(async () => {
+    await close()
+    const dropAdmin = postgres(baseUrl, { max: 1 })
+    await dropAdmin.unsafe(`DROP DATABASE IF EXISTS "${dbName}"`)
+    await dropAdmin.end()
+  })
+
+  return db
+}
+
 export async function createTestApp (): Promise<{ app: FastifyInstance, db: Db, paths: Paths, keypair: ReturnType<typeof loadKeypair> }> {
   const paths = tmpPaths()
   generateAndSaveKeypair(paths)
   const keypair = loadKeypair(paths)
-  const { db } = openDb(':memory:')
+  const db = await createEphemeralDb()
   // A random per-test secret, not paths.ts's ensureAuthSecret() — that
   // persists to this app's real data/ dir, which tests (unlike tmpPaths()
   // above) shouldn't touch.

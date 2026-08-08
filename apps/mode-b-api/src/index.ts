@@ -1,15 +1,18 @@
 import { loadKeypair } from '@campvus/engine'
 import { openDb } from './db/client'
-import { getPaths, getDbPath, ensureInstitutionKeypair, ensureAuthSecret } from './paths'
+import { getPaths, ensureInstitutionKeypair, ensureAuthSecret } from './paths'
 import { buildServer } from './server'
 
 async function main (): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) throw new Error('DATABASE_URL is required (Postgres connection string)')
+
   const paths = getPaths()
   ensureInstitutionKeypair(paths)
   const keypair = loadKeypair(paths)
   const authSecret = ensureAuthSecret()
 
-  const { db } = openDb(getDbPath())
+  const { db } = await openDb(databaseUrl)
 
   const app = await buildServer({ db, paths, keypair, authSecret })
 

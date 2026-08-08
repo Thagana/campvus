@@ -280,9 +280,9 @@ ipcMain.handle('campvus:open-course-file', async (_event, hash: string): Promise
 // Matches @campvus/design's --text-muted / --accent / --danger tokens, so
 // the tray dot reads as the same status color as the in-window status dot.
 const ICON_COLORS: Record<string, string> = {
-  idle: '#8a847a',
-  syncing: '#c96442',
-  error: '#a53e2a',
+  idle: '#616161',
+  syncing: '#0f6cbd',
+  error: '#c50f1f',
 };
 
 // nativeImage.createFromDataURL doesn't decode SVG on Windows (it silently
@@ -388,7 +388,15 @@ const createMainWindow = (): { show(): void } => {
     maxHeight: 860,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#f4f3ee', // @campvus/design --bg-primary; avoids a white flash before CSS loads
+    // Windows 11's own resizable, titled windows (Settings, File Explorer,
+    // Notepad) sit on Mica rather than a flat fill — same window shape as
+    // this one, so we match it here instead of going frameless. index.css's
+    // translucent body background is what actually lets it show through;
+    // the opaque backgroundColor + no backgroundMaterial fallback keeps
+    // Linux (this app also ships deb/rpm builds) on the old flat white.
+    ...(process.platform === 'win32'
+      ? { backgroundMaterial: 'mica' as const, backgroundColor: '#00000000' }
+      : { backgroundColor: '#ffffff' }), // @campvus/design --bg-primary; avoids a flash before CSS loads
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },

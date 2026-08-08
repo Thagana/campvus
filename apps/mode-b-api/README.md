@@ -8,10 +8,10 @@ there's no external LMS to watch. This is the backend only; no UI yet.
 ## Stack
 
 - **Fastify** — HTTP API framework.
-- **SQLite via `node:sqlite`**, wired through Drizzle's `sqlite-proxy` driver — not the usual
-  `better-sqlite3` driver, which requires a native compile that fails without Visual Studio
-  build tools (no prebuilt binary matched this machine). `node:sqlite` ships with Node itself;
-  the only cost is its "experimental" status.
+- **Postgres via `postgres` (postgres.js)**, wired through Drizzle's `postgres-js` driver — a
+  pure-JS driver with no native compile step (unlike `pg-native` or `better-sqlite3`, which
+  fail without Visual Studio build tools; no prebuilt binary matched this machine). Connects
+  using the `DATABASE_URL` env var.
 - **`@node-rs/argon2`** for password hashing — a prebuilt N-API binary per platform, unlike the
   `argon2` package (same native-compile problem as `better-sqlite3`).
 - **DB-backed sessions** via a signed-looking opaque cookie (`campvus_session`) — not a
@@ -35,8 +35,8 @@ setup command before it can boot) and prints the public key. It listens on `PORT
 
 Runtime state lives alongside this app's code, not at the workspace root: `registry.json`,
 `institution-keys.json`, `content-store/` (via `@campvus/engine`, same pattern as
-`apps/mode-a-headless`) and `data/app.db` (Mode B's own SQLite file — accounts, courses,
-enrollments, sessions; not part of the engine at all).
+`apps/mode-a-headless`) — plus accounts/courses/enrollments/sessions, which live in the
+Postgres database pointed at by `DATABASE_URL`, not part of the engine at all.
 
 **Mode B's keypair is separate from Mode A's.** Reconciling trust roots across modes (so the
 same institution's manifests are verifiable everywhere) is Open Question #2 in the
@@ -80,6 +80,11 @@ something this backend-API-first pass tried to paper over.
 ```
 npx tsx --test test/*.test.ts
 ```
+
+Requires `TEST_DATABASE_URL` (see `.env.example`) — a disposable Postgres instance the suite
+can freely create/drop databases on. Each `createTestApp()` call CREATE DATABASEs a uniquely
+named database for isolation (mirroring the old per-test `:memory:` SQLite behaviour) and
+drops it once the importing test file's suite finishes.
 
 Fastify's `.inject()` — no real network port. Covers register/login/logout, course
 creation + enrollment authorization, upload → manifest → content round trip, enrollment

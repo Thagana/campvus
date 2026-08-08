@@ -27,11 +27,12 @@ export function registerAdminRoutes (app: FastifyInstance, db: Db): string {
       // slug has a UNIQUE constraint (db/client.ts) — surfaced to the admin
       // as a clean 409 rather than a raw 500 now that this is HTTP-reachable,
       // not just an operator reading a script's stack trace. Drizzle's
-      // sqlite-proxy driver wraps the real node:sqlite error in a "Failed
+      // postgres-js driver wraps the real Postgres error in a "Failed
       // query: ..." error whose own .message never mentions the constraint
-      // — the actual "UNIQUE constraint failed" text is on .cause.
+      // — the actual PostgresError (SQLSTATE 23505, unique_violation) is on
+      // .cause.
       const cause = err instanceof Error ? err.cause : undefined
-      if (cause instanceof Error && cause.message.includes('UNIQUE constraint failed')) {
+      if (cause instanceof Error && (cause as { code?: string }).code === '23505') {
         return reply.code(409).send({ error: 'a School with this name (or slug) already exists' })
       }
       throw err

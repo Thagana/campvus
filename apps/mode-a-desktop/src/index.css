@@ -6,6 +6,19 @@ body {
   height: 100%;
 }
 
+/* @campvus/design's body rule fills with an opaque --bg-primary, correct
+   for the browser surfaces (mode-b-web) that share it — this app is the
+   one surface where that's wrong. main.ts requests Windows 11 Mica behind
+   this window (win32 only; a plain opaque backgroundColor elsewhere,
+   including the deb/rpm Linux builds), and Mica only reads through where
+   the page itself isn't fully opaque. Cards keep @campvus/design's solid
+   --bg-primary fill and their own shadow/border, so they still read as
+   grouped content sitting on the canvas — the same layering Settings and
+   File Explorer use — rather than everything going translucent at once. */
+body {
+  background: rgba(255, 255, 255, 0.8);
+}
+
 /* This is a resizable tray window (see main.ts), not a fixed popover — the
    header must stay pinned as a landmark while the active panel scrolls on
    its own, instead of the whole page scrolling the header out of view. */
