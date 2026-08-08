@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Mode B teacher web UI — upload course files, manage rosters. Talks to @campvus/mode-b-api.",
+  "license": "MIT",
   "scripts": {
     "start": "vite",
     "dev": "vite",
