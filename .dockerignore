@@ -1,4 +1,11 @@
-node_modules
+# Bare "node_modules" only reliably excludes the top-level directory in
+# practice (verified: apps/mode-b-web/node_modules — including a broken
+# @campvus/design symlink pointing at an absolute host path from local dev
+# — was still landing in the build context and clobbering the correct one
+# `pnpm install` creates inside the container, since COPY apps/mode-b-web
+# apps/mode-b-web runs after the install step). "**/node_modules" is the
+# unambiguous form.
+**/node_modules
 .git
 .scratch
 
