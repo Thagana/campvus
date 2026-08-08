@@ -13,7 +13,9 @@ const api: CampvusApi = {
   },
   getConfig: () => ipcRenderer.invoke('campvus:get-config'),
   saveConfig: (config) => ipcRenderer.invoke('campvus:save-config', config),
-  loginModeB: (args) => ipcRenderer.invoke('campvus:login-mode-b', args)
+  loginModeB: (args) => ipcRenderer.invoke('campvus:login-mode-b', args),
+  getCourseFiles: () => ipcRenderer.invoke('campvus:get-course-files'),
+  openCourseFile: (hash) => ipcRenderer.invoke('campvus:open-course-file', hash)
 }
 
 contextBridge.exposeInMainWorld('campvus', api)

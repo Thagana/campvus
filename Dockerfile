@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7-labs
+
 # Builds and runs Mode B only (apps/mode-b-api + apps/mode-b-web). In
 # production this is a single process: mode-b-api serves its own API routes
 # and mode-b-web's built static assets, same-origin (see
@@ -16,20 +18,20 @@ WORKDIR /app
 # Copy just the workspace manifests first so `pnpm install` is cached
 # across builds that only change application source. pnpm-lock.yaml records
 # every workspace member (all of apps/*, packages/*), so --frozen-lockfile
-# needs all of their package.json files present. pnpm-workspace.yaml sets
-# nodeLinker: hoisted, which flattens all workspace deps into one root
-# node_modules — `pnpm install --filter` doesn't shrink that (verified: it
-# still pulls in Electron/Expo from the other apps), so there's no cheaper
-# partial-install option here. Only mode-b-api/mode-b-web/engine/design get
-# their source copied below and actually built/run.
+# needs all of their package.json files present, even though only
+# mode-b-api/mode-b-web/engine/design get their source copied below and
+# actually built/run. pnpm-workspace.yaml sets nodeLinker: hoisted, which
+# flattens all workspace deps into one root node_modules — `pnpm install
+# --filter` doesn't shrink that (verified: it still pulls in Electron/Expo
+# from the other apps), so there's no cheaper partial-install option here.
+#
+# --parents (needs the syntax directive above) globs every workspace
+# member's manifest in one layer instead of one hand-listed COPY per app —
+# a new app under apps/* or packages/* is picked up automatically, so
+# nothing here can drift out of sync with pnpm-workspace.yaml's own glob
+# the way a hand-maintained list can.
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY apps/mode-b-api/package.json apps/mode-b-api/package.json
-COPY apps/mode-b-web/package.json apps/mode-b-web/package.json
-COPY apps/mode-a-desktop/package.json apps/mode-a-desktop/package.json
-COPY apps/mode-a-headless/package.json apps/mode-a-headless/package.json
-COPY apps/campvus/package.json apps/campvus/package.json
-COPY packages/engine/package.json packages/engine/package.json
-COPY packages/design/package.json packages/design/package.json
+COPY --parents apps/*/package.json packages/*/package.json ./
 
 RUN pnpm install --frozen-lockfile
 

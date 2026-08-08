@@ -73,3 +73,16 @@
 .settings-card .row {
   align-items: center;
 }
+
+.files-card #files-list .eyebrow {
+  display: block;
+  margin-top: var(--space-2);
+}
+
+.files-card #files-list .eyebrow:first-child {
+  margin-top: 0;
+}
+
+.files-card .detail-row {
+  align-items: center;
+}

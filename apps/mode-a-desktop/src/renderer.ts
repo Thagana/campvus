@@ -8,7 +8,8 @@
 import '@campvus/design/index.css';
 import './index.css';
 import { describeState } from './status-view';
-import type { AppState, PartialDesktopConfig } from './preload-api';
+import { groupCourseFiles } from './course-files-view';
+import type { AppState, CourseFile, PartialDesktopConfig } from './preload-api';
 
 const statusDot = document.getElementById('status-dot') as HTMLElement;
 const statusLabel = document.getElementById('status-label') as HTMLElement;
@@ -24,6 +25,13 @@ const settingsToggle = document.getElementById('settings-toggle') as HTMLButtonE
 const settingsCancel = document.getElementById('settings-cancel') as HTMLButtonElement;
 const settingsForm = document.getElementById('settings-form') as HTMLFormElement;
 const settingsError = document.getElementById('settings-error') as HTMLElement;
+
+const filesSection = document.getElementById('files-section') as HTMLElement;
+const filesToggle = document.getElementById('files-toggle') as HTMLButtonElement;
+const filesClose = document.getElementById('files-close') as HTMLButtonElement;
+const filesList = document.getElementById('files-list') as HTMLElement;
+const filesEmpty = document.getElementById('files-empty') as HTMLElement;
+const filesError = document.getElementById('files-error') as HTMLElement;
 
 const loginForm = document.getElementById('login-form') as HTMLFormElement;
 const loginSubmit = document.getElementById('login-submit') as HTMLButtonElement;
@@ -46,9 +54,19 @@ function render(state: AppState): void {
   errorMessage.textContent = view.errorMessage ?? '';
 }
 
-function showSettings (show: boolean): void {
-  settingsSection.hidden = !show;
-  statusSection.hidden = show;
+type Panel = 'status' | 'settings' | 'files';
+
+// Mutually exclusive — status/settings/files share this one small window
+// rather than each getting their own, so opening one always closes the
+// others (mirrors the original showSettings(show) boolean, generalized to
+// a third panel).
+let currentPanel: Panel = 'status';
+
+function setPanel (panel: Panel): void {
+  currentPanel = panel;
+  statusSection.hidden = panel !== 'status';
+  settingsSection.hidden = panel !== 'settings';
+  filesSection.hidden = panel !== 'files';
 }
 
 function populateForm (config: PartialDesktopConfig): void {
@@ -77,14 +95,14 @@ function readForm (): PartialDesktopConfig {
 settingsToggle.addEventListener('click', async () => {
   settingsError.hidden = true;
   populateForm(await window.campvus.getConfig());
-  showSettings(true);
+  setPanel('settings');
 });
 
 settingsCancel.addEventListener('click', () => {
   // Unconfigured installs have nothing to cancel back to — keep the form
   // open rather than swapping to an empty status card.
   if (latestState && !latestState.configured) return;
-  showSettings(false);
+  setPanel('status');
 });
 
 settingsForm.addEventListener('submit', async (event) => {
@@ -98,7 +116,7 @@ settingsForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  showSettings(false);
+  setPanel('status');
 });
 
 loginForm.addEventListener('submit', async (event) => {
@@ -125,10 +143,66 @@ loginForm.addEventListener('submit', async (event) => {
 
     loginStatus.textContent = 'Signed in.';
     populateForm(result.config);
-    showSettings(false);
+    setPanel('status');
   } finally {
     loginSubmit.disabled = false;
   }
+});
+
+function renderFiles (files: CourseFile[]): void {
+  const groups = groupCourseFiles(files);
+  filesList.replaceChildren();
+  filesEmpty.hidden = groups.length > 0;
+
+  for (const group of groups) {
+    const heading = document.createElement('div');
+    heading.className = 'eyebrow';
+    heading.textContent = group.courseId;
+    filesList.appendChild(heading);
+
+    for (const file of group.files) {
+      const row = document.createElement('div');
+      row.className = 'detail-row';
+
+      const label = document.createElement('span');
+      label.className = 'muted';
+      label.textContent = `${file.filename} · ${file.sizeLabel}`;
+      row.appendChild(label);
+
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'btn btn-secondary';
+      action.textContent = file.canOpen ? 'Open' : file.statusLabel;
+      action.disabled = !file.canOpen;
+      action.addEventListener('click', async () => {
+        filesError.hidden = true;
+        action.disabled = true;
+        const result = await window.campvus.openCourseFile(file.hash);
+        action.disabled = !file.canOpen;
+        if (!result.ok) {
+          filesError.textContent = result.error ?? 'Could not open this file.';
+          filesError.hidden = false;
+        }
+      });
+      row.appendChild(action);
+
+      filesList.appendChild(row);
+    }
+  }
+}
+
+async function refreshFiles (): Promise<void> {
+  renderFiles(await window.campvus.getCourseFiles());
+}
+
+filesToggle.addEventListener('click', async () => {
+  filesError.hidden = true;
+  setPanel('files');
+  await refreshFiles();
+});
+
+filesClose.addEventListener('click', () => {
+  setPanel('status');
 });
 
 window.campvus.getState().then((state) => {
@@ -136,8 +210,14 @@ window.campvus.getState().then((state) => {
   if (!state.configured) {
     window.campvus.getConfig().then((config) => {
       populateForm(config);
-      showSettings(true);
+      setPanel('settings');
     });
   }
 });
-window.campvus.onStateChange(render);
+window.campvus.onStateChange((state) => {
+  render(state);
+  // Refresh the open files panel as syncing progresses (a file's status
+  // flips from "Syncing…" to "Open"), rather than requiring the panel to
+  // be closed and reopened to see it.
+  if (currentPanel === 'files') void refreshFiles();
+});

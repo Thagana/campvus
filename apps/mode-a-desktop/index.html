@@ -10,6 +10,7 @@
         <span class="eyebrow">Campvus</span>
         <span class="header-actions">
           <span class="status-dot" id="status-dot" data-status="idle"></span>
+          <button type="button" class="btn-ghost" id="files-toggle">Files</button>
           <button type="button" class="btn-ghost settings-toggle" id="settings-toggle">Settings</button>
         </span>
       </header>
@@ -34,6 +35,16 @@
             <span class="detail-value" id="seeding-value">Allowed</span>
           </div>
         </section>
+      </section>
+
+      <section class="card files-card" id="files-section" hidden>
+        <h2>Course files</h2>
+        <p class="muted" id="files-empty">No files yet — check back once syncing finds some.</p>
+        <div id="files-list"></div>
+        <p class="error" id="files-error" hidden></p>
+        <div class="row">
+          <button type="button" class="btn btn-secondary" id="files-close">Close</button>
+        </div>
       </section>
 
       <section class="card settings-card" id="settings-section" hidden>

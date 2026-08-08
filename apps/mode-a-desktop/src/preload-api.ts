@@ -31,6 +31,24 @@ export type LoginModeBResult =
   | { ok: true, config: PartialDesktopConfig }
   | { ok: false, error: string }
 
+// One signature-verified manifest entry, scoped to the signed-in student's
+// own enrolled courses. `downloaded` reflects whether the content-store
+// blob is actually on disk yet — a file can be known (its manifest synced)
+// before its bytes have (course-files-view.ts's "Syncing…" vs "Open" state).
+export interface CourseFile {
+  courseId: string
+  filename: string
+  hash: string
+  size: number
+  timestamp: number
+  downloaded: boolean
+}
+
+export interface OpenCourseFileResult {
+  ok: boolean
+  error?: string
+}
+
 export interface CampvusApi {
   getState (): Promise<AppState>
   // Returns an unsubscribe function.
@@ -41,6 +59,11 @@ export interface CampvusApi {
   // courseIds/institutionPublicKeyHex/originUrl/manifestOriginUrl from it —
   // closes Open Question #9(a) (docs/ARCHITECTURE.md) on the desktop side.
   loginModeB (args: LoginModeBArgs): Promise<LoginModeBResult>
+  getCourseFiles (): Promise<CourseFile[]>
+  // Materializes the content-addressed blob under its real filename and
+  // opens it with the OS's default handler — the content-store itself only
+  // ever holds hash-named files (see content-store.ts).
+  openCourseFile (hash: string): Promise<OpenCourseFileResult>
 }
 
 export type { DesktopConfig, PartialDesktopConfig }

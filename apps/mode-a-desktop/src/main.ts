@@ -1,7 +1,8 @@
-import { app, BrowserWindow, Tray, nativeImage, ipcMain } from 'electron';
+import { app, BrowserWindow, Tray, nativeImage, ipcMain, shell } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
-import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher, SwarmNode } from '@campvus/engine';
+import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher, loadRegistry, hasContent, verifyManifest, SwarmNode } from '@campvus/engine';
 import { createAgent, AgentEngineEvents, Agent } from './agent';
 import { createWindowController } from './window-controller';
 import { selectDesktopSeedingPolicy } from './seeding-policy-selection';
@@ -9,7 +10,7 @@ import { configureAutoLaunch } from './auto-launch';
 import { getPaths } from './paths';
 import { loadConfigFile, saveConfigFile, mergeConfig, validateConfig, DesktopConfig, PartialDesktopConfig } from './config-store';
 import { nodeRequest, NodeResponse } from './node-request';
-import type { AppState, SaveConfigResult, LoginModeBArgs, LoginModeBResult } from './preload-api';
+import type { AppState, SaveConfigResult, LoginModeBArgs, LoginModeBResult, CourseFile, OpenCourseFileResult } from './preload-api';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -212,7 +213,13 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
     ...currentConfig,
     modeBToken: token,
     institutionPublicKeyHex: publicKeyHex,
-    originUrl: trimmedUrl,
+    // httpOriginFetcher (packages/engine/origin.ts) appends the hash
+    // directly to originUrl (GET <originUrl>/<hash>) — Mode B's actual
+    // route is /content/:hash, not /:hash, so this must include that
+    // segment. httpManifestListFetcher, by contrast, already appends
+    // 'courses/:courseId/manifests' itself, so manifestOriginUrl is
+    // correctly just the bare server URL.
+    originUrl: new URL('content/', base).href,
     manifestOriginUrl: trimmedUrl,
     courseIds,
   };
@@ -222,6 +229,55 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
   saveConfigFile(configFile, merged);
   await restartEngine(merged as DesktopConfig);
   return { ok: true, config: merged };
+});
+
+// The registry (packages/engine's manifest-store.ts) is shared/global on
+// disk — filter to this student's own enrolled courses and re-verify each
+// manifest's signature ourselves (mirrors swarm-node.ts's own
+// verify-before-trust step; the two are independent readers of the same
+// registry.json, not a shared cache) rather than trusting anything a
+// tampered file might contain.
+function getCourseFiles (): CourseFile[] {
+  const publicKeyHex = currentConfig?.institutionPublicKeyHex;
+  if (!publicKeyHex) return [];
+  const courseIdSet = new Set(currentConfig.courseIds ?? []);
+  return loadRegistry(paths)
+    .filter((m) => courseIdSet.has(m.courseId) && verifyManifest(m, publicKeyHex))
+    .map((m) => ({
+      courseId: m.courseId,
+      filename: m.filename,
+      hash: m.hash,
+      size: m.size,
+      timestamp: m.timestamp,
+      downloaded: hasContent(paths.contentStoreDir, m.hash),
+    }));
+}
+
+ipcMain.handle('campvus:get-course-files', () => getCourseFiles());
+
+// content-store.ts only ever holds hash-named blobs (dedup by design) — on
+// open, copy the bytes out to a stable, human-named path and hand that to
+// the OS, rather than ever renaming/mutating anything inside the store
+// itself. `filename` comes from a signature-verified manifest (trusted,
+// signed by the institution keypair), but path segments are still
+// sanitized before touching the filesystem — defense in depth, not a trust
+// boundary this code relies on.
+function sanitizePathSegment (value: string): string {
+  return value.replace(/[\\/]/g, '_').replace(/^\.+/, '_');
+}
+
+ipcMain.handle('campvus:open-course-file', async (_event, hash: string): Promise<OpenCourseFileResult> => {
+  const file = getCourseFiles().find((f) => f.hash === hash);
+  if (!file) return { ok: false, error: 'Unknown file — try refreshing.' };
+  if (!file.downloaded) return { ok: false, error: 'Not downloaded yet — still syncing.' };
+
+  const destDir = path.join(paths.rootDir, 'opened-files', sanitizePathSegment(file.courseId));
+  fs.mkdirSync(destDir, { recursive: true });
+  const destPath = path.join(destDir, sanitizePathSegment(file.filename));
+  fs.copyFileSync(path.join(paths.contentStoreDir, file.hash), destPath);
+
+  const openError = await shell.openPath(destPath);
+  return openError ? { ok: false, error: openError } : { ok: true };
 });
 
 // Matches @campvus/design's --text-muted / --accent / --danger tokens, so

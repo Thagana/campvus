@@ -1,0 +1,71 @@
+name: Desktop CI & Release
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: desktop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # maker-deb/maker-rpm shell out to dpkg-deb/rpmbuild, which ubuntu-latest
+      # doesn't ship with rpm tooling by default.
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter mode-a-desktop run typecheck
+      - run: pnpm --filter mode-a-desktop run test
+      - run: pnpm --filter mode-a-desktop run make
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mode-a-desktop-${{ runner.os }}
+          path: apps/mode-a-desktop/out/make/**
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: mode-a-desktop-*
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/**/*.exe
+            dist/**/*.nupkg
+            dist/**/RELEASES
+            dist/**/*.zip
+            dist/**/*.deb
+            dist/**/*.rpm

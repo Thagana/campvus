@@ -22,5 +22,13 @@
     "size": 18493,
     "timestamp": 1786127558385,
     "signature": "b656b7930f69d68c31062d74f20604ab1a89409eff9585e319a91f6ad02cc19e811859ab5df5cb41c722bf34af1be8754f59d73d6de7e57d29bb969dcf51f108"
+  },
+  {
+    "courseId": "COMSCI214",
+    "filename": "Football_Betting_Model.xlsx",
+    "hash": "29579ea7d54060153db9f01354b5919c8527c52292eff0613671a86860c32d40",
+    "size": 49299,
+    "timestamp": 1786184194472,
+    "signature": "e5552ec28bc40b46123e5341d1ca4bb85c84f33e3d95d6a14424d8031a684f12e98507094eacf5f3b6e7e68f26d62501e3e5715c709d67f859f762eaa6205308"
   }
 ]
