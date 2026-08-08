@@ -44,3 +44,8 @@ enforced when an invitation is accepted.
 - Course creation moves from "any authenticated user" to "any Teacher in the School."
 - The open sign-up flow in `routes/auth.ts` stops being the onboarding path for real Schools;
   new members arrive via org invitation instead.
+
+This closes ARCHITECTURE.md §13.2 / TODO.md gap #9 ("institution-controlled account
+provisioning"). What's still open beneath it: the platform admin who can call `POST
+/admin/schools` is identified by an env-var email allowlist (`auth/platform-admin.ts`), not a
+real, auditable role system — a smaller follow-up, not a blocker.

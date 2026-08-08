@@ -92,6 +92,70 @@ function authHeaders (config: DesktopConfig): Record<string, string> | undefined
   return config.modeBToken ? { Authorization: `Bearer ${config.modeBToken}` } : undefined;
 }
 
+// Separate from MANIFEST_SYNC_INTERVAL_MS (which the engine itself uses to
+// catch up on published manifests) — this re-checks the student's own
+// enrollment against a live Mode B server, so a course added after sign-in
+// gets picked up without the student re-entering their password. Mode A's
+// manual-config path has no equivalent since there's no server to ask.
+const COURSE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+let courseRefreshTimer: NodeJS.Timeout | undefined;
+
+async function fetchModeBCourseIds (base: URL, headers: Record<string, string>): Promise<string[]> {
+  const res = await nodeRequest(new URL('courses', base), { headers });
+  if (!res.ok) throw new Error('Could not fetch your courses.');
+  const courses = await res.json() as Array<{ id: string }>;
+  return courses.map((c) => c.id);
+}
+
+function sameCourseIds (a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((id, i) => id === sortedB[i]);
+}
+
+// A failed refresh (network hiccup, server briefly down) just logs and
+// leaves the existing config alone — unlike sign-in, there's no interactive
+// form to surface an error on, and dropping the student's swarm connection
+// over a transient failure would be worse than staying on stale course IDs
+// until the next tick. An empty result is treated the same way: more likely
+// a transient/auth blip than "enrolled in zero courses now" — courseIds
+// only ever changes here when the new list is non-empty and actually differs.
+async function refreshModeBCourses (): Promise<void> {
+  if (!currentConfig.modeBToken || !currentConfig.manifestOriginUrl) return;
+  let base: URL;
+  try {
+    const url = currentConfig.manifestOriginUrl;
+    base = new URL(url.endsWith('/') ? url : url + '/');
+  } catch {
+    return;
+  }
+
+  let courseIds: string[];
+  try {
+    courseIds = await fetchModeBCourseIds(base, { Authorization: `Bearer ${currentConfig.modeBToken}` });
+  } catch (err) {
+    console.error('Mode B course refresh failed:', err instanceof Error ? err.message : String(err));
+    return;
+  }
+  if (courseIds.length === 0 || sameCourseIds(courseIds, currentConfig.courseIds)) return;
+
+  const merged: PartialDesktopConfig = { ...currentConfig, courseIds };
+  saveConfigFile(configFile, merged);
+  await restartEngine(merged as DesktopConfig);
+}
+
+// Called from configureEngine so the timer always matches whatever config
+// is currently active — armed only when a Mode B session exists, disarmed
+// (and any previous timer cleared) otherwise, including on sign-out or a
+// switch back to Mode A's manual settings.
+function startCourseRefreshTimer (config: DesktopConfig): void {
+  if (courseRefreshTimer) clearInterval(courseRefreshTimer);
+  courseRefreshTimer = config.modeBToken
+    ? setInterval(() => { refreshModeBCourses().catch((err) => console.error('Mode B course refresh failed:', err)); }, COURSE_REFRESH_INTERVAL_MS)
+    : undefined;
+}
+
 function configureEngine (config: DesktopConfig): void {
   currentConfig = config;
   if (config.institutionPublicKeyHex) {
@@ -115,6 +179,7 @@ function configureEngine (config: DesktopConfig): void {
       'Open Settings and enter the institution public key before syncing can start.'
     )));
   }
+  startCourseRefreshTimer(config);
 }
 
 // Called whenever Settings saves a new config after the app is already
@@ -190,21 +255,18 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
   const headers = { Authorization: `Bearer ${token}` };
 
   let publicKeyRes: NodeResponse;
-  let coursesRes: NodeResponse;
+  let courseIds: string[];
   try {
-    [publicKeyRes, coursesRes] = await Promise.all([
+    [publicKeyRes, courseIds] = await Promise.all([
       nodeRequest(new URL('public-key', base), { headers }),
-      nodeRequest(new URL('courses', base), { headers }),
+      fetchModeBCourseIds(base, headers),
     ]);
   } catch (err) {
     return { ok: false, error: `Signed in, but could not fetch account details: ${err instanceof Error ? err.message : String(err)}` };
   }
   if (!publicKeyRes.ok) return { ok: false, error: 'Signed in, but could not fetch the institution public key.' };
-  if (!coursesRes.ok) return { ok: false, error: 'Signed in, but could not fetch your courses.' };
 
   const { publicKeyHex } = await publicKeyRes.json() as { publicKeyHex: string };
-  const courses = await coursesRes.json() as Array<{ id: string }>;
-  const courseIds = courses.map((c) => c.id);
   if (courseIds.length === 0) {
     return { ok: false, error: "Signed in, but you're not enrolled in (or teaching) any courses yet." };
   }

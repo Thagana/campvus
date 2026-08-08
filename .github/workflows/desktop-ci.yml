@@ -5,7 +5,7 @@ on:
     branches: [master]
     tags: ["v*.*.*"]
   pull_request:
-    branches: [master]
+    branches: [master, "release/**"]
 
 concurrency:
   group: desktop-ci-${{ github.ref }}
@@ -35,9 +35,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm --filter mode-a-desktop run typecheck
-      - run: pnpm --filter mode-a-desktop run test
-      - run: pnpm --filter mode-a-desktop run make
+      - run: pnpm --filter campvus-p2p run typecheck
+      - run: pnpm --filter campvus-p2p run test
+      - run: pnpm --filter campvus-p2p run make
 
       - uses: actions/upload-artifact@v4
         with:

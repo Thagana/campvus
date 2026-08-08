@@ -16,9 +16,10 @@ there's no external LMS to watch. This is the backend only; no UI yet.
   `argon2` package (same native-compile problem as `better-sqlite3`).
 - **DB-backed sessions** via a signed-looking opaque cookie (`campvus_session`) — not a
   stateless JWT, so a session can be revoked by deleting its row.
-- No `drizzle-kit` migrations yet — `db/client.ts` applies its DDL idempotently
-  (`CREATE TABLE IF NOT EXISTS`) on every boot. Fine for one pilot deployment; real migrations
-  are a before-production concern.
+- **`drizzle-kit` migrations** — `db/client.ts` runs `drizzle-orm`'s `migrate()` against the
+  generated SQL in `drizzle/` on every boot, instead of the old hand-written idempotent DDL.
+  After changing `src/db/schema.ts`, run `pnpm db:generate` (wraps `drizzle-kit generate`) to
+  produce a new migration file, then commit it alongside the schema change.
 
 ## Setup
 

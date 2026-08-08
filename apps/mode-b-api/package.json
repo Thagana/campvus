@@ -8,7 +8,8 @@
     "dev": "tsx --env-file-if-exists=.env src/index.ts",
     "create-school": "tsx --env-file-if-exists=.env src/scripts/create-school.ts",
     "test": "tsx --env-file-if-exists=.env --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@campvus/engine": "workspace:*",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2"
   }

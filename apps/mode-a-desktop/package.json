@@ -1,8 +1,8 @@
 {
-  "name": "mode-a-desktop",
-  "productName": "mode-a-desktop",
-  "version": "1.0.2",
-  "description": "My Electron application description",
+  "name": "campvus-p2p",
+  "productName": "campvus",
+  "version": "1.0.3",
+  "description": "Campvus student P2P file sharing",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
@@ -52,6 +52,7 @@
   "dependencies": {
     "@campvus/design": "workspace:*",
     "@campvus/engine": "workspace:*",
+    "@fontsource/poppins": "^5.3.0",
     "electron-squirrel-startup": "^1.0.1"
   }
 }

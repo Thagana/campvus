@@ -13,11 +13,11 @@
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
 │ 6   │ Multi-institution trust-root model undecided                                                                                                                                    │ Open Q2                            │
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
-│ 7   │ Mode B student UI not built (needs Electron shell)                                                                                                                              │ ARCHITECTURE §3.2/§13.2            │
+│ 7   │ PARTIAL — desktop app's Mode B sign-in already covers login/course-sync/swarm, now with periodic enrollment refresh. Unvalidated: real P2P swarm between two Mode B clients.    │ ARCHITECTURE §3.2/§13.2            │
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
-│ 8   │ drizzle-kit migrations missing                                                                                                                                                  │ ARCHITECTURE §13.2                 │
+│ 8   │ RESOLVED — db/client.ts now runs real drizzle-kit-generated migrations (drizzle/) via migrate(), replacing the old idempotent DDL.                                              │ ARCHITECTURE §13.2                 │
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
-│ 9   │ Institution-controlled account provisioning (registration currently open)                                                                                                       │ ARCHITECTURE §13.2                 │
+│ 9   │ RESOLVED — School provisioning is admin-gated + invite-only per ADR-0005 (env-allowlisted admin creates Schools; membership invite-only). Registration stays open by design.    │ ARCHITECTURE §13.2, ADR-0005       │
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
 │ 10  │ RESOLVED — macOS (swift/NWPathMonitor, unverified on real hardware) and Linux (nmcli GENERAL.METERED) detection added to network-type.ts; both fail-safe to null like Windows │ ARCHITECTURE §13.1                 │
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
@@ -59,9 +59,9 @@ Phase 2 — Mode A ↔ Mode B interop
 - PARTIALLY DONE: manifest-sync bridge mechanism now wired on the Mode A side (engine + CLI + desktop Settings), but still blocked end-to-end against a live Mode B server until gap 2 (auth) lands (gap 3)
 
 Phase 3 — Complete Mode B
-- Build the student client on an Electron/Node shell (gap 7) — likely reuses apps/mode-a-desktop's scaffold
-- Add drizzle-kit migrations (gap 8)
-- Close open registration with institution-controlled provisioning (gap 9)
+- Build the student client on an Electron/Node shell (gap 7) — extending apps/mode-a-desktop in place (its existing "Sign in to Campvus" flow already covers most of this)
+- DONE: drizzle-kit migrations (gap 8)
+- DONE: institution-controlled provisioning (gap 9) — closed by ADR-0005; platform-admin-as-env-allowlist tracked as a smaller follow-up, not blocking
 
 Phase 4 — Production hardening (both modes)
 - Move key custody to KMS/HSM (gap 4)
