@@ -1,17 +1,81 @@
 /* Panel-specific layout only — tokens, resets, and shared components
    (card, status-dot, eyebrow, muted) come from @campvus/design. */
 
+html,
+body {
+  height: 100%;
+}
+
+/* This is a resizable tray window (see main.ts), not a fixed popover — the
+   header must stay pinned as a landmark while the active panel scrolls on
+   its own, instead of the whole page scrolling the header out of view. */
 .app {
-  padding: var(--space-3);
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
 }
 
 .app-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+/* Status ring — echoes the tray icon's hand-drawn open-ring monogram
+   (main.ts's renderRingIcon: radius 6/stroke 3 on a 16px grid, gap spanning
+   -40deg..40deg) so the in-window indicator and the menu-bar mark read as
+   the same object, not two unrelated status widgets. Overridden here at
+   higher specificity than @campvus/design's base .status-dot rule (scoped
+   under .app-header) rather than edited in the shared file, since that
+   file's plain filled dot is still correct for any other surface that
+   reuses it. */
+.app-header .status-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: conic-gradient(var(--text-muted) 0deg 50deg, transparent 50deg 130deg, var(--text-muted) 130deg 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
+}
+
+.app-header .status-dot[data-status='syncing'] {
+  background: conic-gradient(var(--accent) 0deg 50deg, transparent 50deg 130deg, var(--accent) 130deg 360deg);
+  animation: ring-spin 2.4s linear infinite;
+}
+
+.app-header .status-dot[data-status='error'] {
+  background: conic-gradient(var(--danger) 0deg 50deg, transparent 50deg 130deg, var(--danger) 130deg 360deg);
+}
+
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header .status-dot[data-status='syncing'] {
+    animation: none;
+  }
+}
+
+.header-actions button[aria-current='true'] {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 600;
 }
 
 .status-card h1 {
@@ -47,6 +111,10 @@
 .detail-value {
   font-weight: 500;
   color: var(--text-primary);
+}
+
+.detail-value.positive {
+  color: var(--success);
 }
 
 .header-actions {
@@ -85,4 +153,18 @@
 
 .files-card .detail-row {
   align-items: center;
+  min-width: 0;
+}
+
+/* A course's filename can run long — truncate it rather than squeezing the
+   Open/Syncing… button or wrapping the row onto a second line. */
+.files-card .detail-row .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.files-card .detail-row button {
+  flex-shrink: 0;
 }

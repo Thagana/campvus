@@ -20,7 +20,7 @@ import path from 'path'
 import { Duplex } from 'stream'
 import Hyperswarm from 'hyperswarm'
 import b4a from 'b4a'
-import { loadRegistry } from './manifest-store'
+import { loadRegistry, saveRegistry } from './manifest-store'
 import { listContentHashes, readContent, writeContent, touchContent } from './content-store'
 import { loadPublicKeyHex } from './identity'
 import { verifyManifest } from './crypto-utils'
@@ -97,6 +97,15 @@ export interface SwarmNode {
   // tests and an eventual "sync now" UI action; start() already calls this
   // once on its own, and again on manifestSyncIntervalMs if configured.
   checkOriginForManifests (): Promise<void>
+  // Every manifest this node has learned and trusts — course-scoped and
+  // signature-verified before ever entering the underlying map (both at
+  // startup, above, and via applyManifestsMessage), so callers don't need
+  // to re-verify. Manifests learned at runtime are also persisted back to
+  // this node's own registry.json (persistKnownManifests, below) as they
+  // arrive, so this in-memory map and that file converge — but while the
+  // node is running, this getter reflects the current moment; a file read
+  // could be a write behind it.
+  getKnownManifests (): SignedManifest[]
 }
 
 export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
@@ -127,6 +136,17 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
     }
   }
   log(`Starting with ${knownManifests.size} locally known, signature-verified manifest(s).`)
+
+  // Writes the node's full current knowledge back to its own local
+  // registry.json — called whenever a peer or origin teaches it manifests
+  // it didn't already have (below), so a restart re-seeds knownManifests
+  // (above) from what this node has already learned instead of starting
+  // over and re-discovering it from the network again. Each device has its
+  // own paths.registryFile, so this never collides with a teacher/origin's
+  // own registry.json on a different machine — see manifest-store.ts.
+  function persistKnownManifests (): void {
+    saveRegistry(Array.from(knownManifests.values()), paths)
+  }
 
   const localHashes = listContentHashes(contentDir)
   log(`Starting with ${localHashes.size} content file(s) already on disk.`)
@@ -204,6 +224,7 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
         }
         if (result.learned.length > 0) {
           log(`[origin-sync] learned ${result.learned.length} new verified manifest(s) from origin for course "${id}"`)
+          persistKnownManifests()
         }
         for (const m of result.toRequest) {
           considerMissing(m)
@@ -233,6 +254,7 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
       }
       if (learned.length > 0) {
         log(`[peer ${peerId}] learned ${learned.length} new verified manifest(s)`)
+        persistKnownManifests()
       }
 
       // Ask for anything we don't already have — but only once per hash at
@@ -322,6 +344,7 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
     onSyncEnd: tracker.onSyncEnd,
     onError: (handler) => { errorHandlers.push(handler) },
     checkOriginForManifests,
+    getKnownManifests: () => Array.from(knownManifests.values()),
 
     async start (): Promise<void> {
       swarm = new Hyperswarm()

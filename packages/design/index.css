@@ -1,6 +1,9 @@
 /*
- * Campvus design system — the Claude "Warm Editorial" spec: cream/terracotta/ink,
- * serif headlines over a humanist sans body, flat surfaces, one accent per viewport.
+ * Campvus design system — built on Fluent 2 (fluent2.microsoft.design): the
+ * neutral/brand-blue token set, Segoe UI Variable type ramp, and elevation/
+ * motion curves Microsoft ships for Windows and Microsoft 365 surfaces. No
+ * React here, so these are Fluent 2's published values ported to plain CSS
+ * custom properties and component classes rather than @fluentui/react-components.
  * Shared by every product surface (mode-b-web, mode-a-desktop) so they read as one
  * product. Surface-specific layout lives in each app's own index.css; this file only
  * owns tokens, resets, and reusable component classes.
@@ -9,49 +12,61 @@
 :root {
   color-scheme: light;
 
-  /* Color */
-  --bg-primary: #f4f3ee;
-  --bg-secondary: #eeede6;
-  --bg-inverse: #191817;
-  --text-primary: #191817;
-  --text-secondary: #5a554e;
-  --text-muted: #8a847a;
-  --accent: #c96442;
-  --accent-hover: #b55738;
-  --accent-soft: #e89268;
-  --border: #d8d3c8;
-  --success: #6b7a3d;
-  --warning: #c98a42;
-  --danger: #a53e2a;
+  /* Color — Fluent 2 neutral + brand ("Comm Blue") ramps */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-inverse: #1b1a19;
+  --text-primary: #242424;
+  --text-secondary: #424242;
+  --text-muted: #616161;
+  --accent: #0f6cbd;
+  --accent-hover: #115ea3;
+  --accent-soft: #deecf9;
+  --border: #d1d1d1;
+  --success: #0e700e;
+  --warning: #9d5d00;
+  --danger: #c50f1f;
 
-  /* Type */
-  --font-headline: 'Iowan Old Style', Georgia, serif;
-  --font-body: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  /* Type — Segoe UI Variable, Fluent 2's compact UI ramp (base is 14px, not
+     an editorial reading size) and Cascadia Code for the monospace role,
+     Microsoft's own terminal/VS Code font. */
+  --font-headline: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Cascadia Code', 'Cascadia Mono', Consolas, monospace;
 
-  --text-xs: 13px;
-  --text-sm: 15px;
-  --text-base: 17px;
-  --text-lg: 21px;
-  --text-xl: 26px;
-  --text-2xl: 32px;
-  --text-3xl: 40px;
-  --text-4xl: 50px;
-  --text-5xl: 62px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 28px;
+  --text-4xl: 40px;
+  --text-5xl: 68px;
 
-  /* Space — 8px baseline grid */
-  --space-1: 8px;
-  --space-2: 16px;
-  --space-3: 24px;
-  --space-4: 32px;
-  --space-6: 48px;
-  --space-8: 64px;
-  --space-12: 96px;
+  /* Space — Fluent 2's 4px-rooted spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 20px;
+  --space-8: 24px;
+  --space-12: 32px;
 
-  --radius-control: 6px;
+  --radius-control: 4px;
   --radius-card: 8px;
 
-  --shadow-modal: 0 8px 24px rgba(25, 24, 23, 0.08);
+  /* Elevation — Fluent 2's two-layer ambient+key shadow scale */
+  --shadow-2: 0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14);
+  --shadow-4: 0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14);
+  --shadow-8: 0 0 2px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.14);
+  --shadow-16: 0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14);
+  --shadow-modal: var(--shadow-16);
+
+  /* Motion — Fluent 2's easy-ease curve and matching durations */
+  --ease-fluent: cubic-bezier(0.33, 0, 0.67, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
 
   --content-editorial: 680px;
   --content-app: 1180px;
@@ -83,8 +98,7 @@ h2,
 h3,
 h4 {
   font-family: var(--font-headline);
-  font-weight: 500;
-  letter-spacing: -0.015em;
+  font-weight: 600;
   text-wrap: balance;
   margin: 0 0 var(--space-2);
 }
@@ -173,16 +187,17 @@ a {
 
 .btn {
   font-family: var(--font-body);
-  font-weight: 500;
+  font-weight: 600;
   font-size: var(--text-sm);
   border-radius: var(--radius-control);
-  padding: 10px 18px;
+  padding: 5px 12px;
+  min-height: 32px;
   border: 1px solid transparent;
   cursor: pointer;
   transition:
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease;
+    background-color var(--duration-fast) var(--ease-fluent),
+    border-color var(--duration-fast) var(--ease-fluent),
+    color var(--duration-fast) var(--ease-fluent);
 }
 
 .btn:disabled {
@@ -190,9 +205,15 @@ a {
   cursor: default;
 }
 
+.btn:focus-visible,
+.btn-ghost:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .btn-primary {
   background: var(--accent);
-  color: var(--bg-primary);
+  color: #ffffff;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -200,7 +221,7 @@ a {
 }
 
 .btn-secondary {
-  background: transparent;
+  background: var(--bg-primary);
   color: var(--text-primary);
   border-color: var(--border);
 }
@@ -209,30 +230,34 @@ a {
   background: var(--bg-secondary);
 }
 
+/* Fluent's text/"subtle" button — no underline, a plain label that lights
+   up with a neutral wash on hover rather than reading as a hyperlink. */
 .btn-ghost {
   background: none;
   border: none;
-  color: var(--accent);
-  padding: 0;
-  text-decoration: underline;
+  color: var(--text-primary);
+  padding: 5px 8px;
+  min-height: 32px;
+  border-radius: var(--radius-control);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  color: var(--accent-hover);
+  background: var(--bg-secondary);
 }
 
 /* Cards */
 
 .card {
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border-radius: var(--radius-card);
-  border: 1px solid transparent;
-  padding: var(--space-3);
-  transition: border-color 120ms ease;
+  border: 1px solid var(--border);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-2);
+  transition: box-shadow var(--duration-fast) var(--ease-fluent);
 }
 
 .card:hover {
-  border-color: var(--border);
+  box-shadow: var(--shadow-8);
 }
 
 /* Forms */

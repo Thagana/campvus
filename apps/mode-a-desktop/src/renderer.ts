@@ -52,6 +52,8 @@ function render(state: AppState): void {
 
   errorBanner.hidden = view.errorMessage === undefined;
   errorMessage.textContent = view.errorMessage ?? '';
+
+  seedingValue.classList.toggle('positive', state.seedingAllowed);
 }
 
 type Panel = 'status' | 'settings' | 'files';
@@ -67,6 +69,8 @@ function setPanel (panel: Panel): void {
   statusSection.hidden = panel !== 'status';
   settingsSection.hidden = panel !== 'settings';
   filesSection.hidden = panel !== 'files';
+  filesToggle.setAttribute('aria-current', String(panel === 'files'));
+  settingsToggle.setAttribute('aria-current', String(panel === 'settings'));
 }
 
 function populateForm (config: PartialDesktopConfig): void {

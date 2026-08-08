@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Campvus</title>
+    <title>Campvus (preview)</title>
   </head>
   <body>
     <main class="app">
@@ -110,6 +110,14 @@
       </section>
       </div>
     </main>
-    <script type="module" src="/src/renderer.ts"></script>
+    <script type="module" src="/src/preview-entry.ts"></script>
+    <script type="module">
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const header = document.querySelector('.app-header');
+        const actions = document.querySelector('.header-actions');
+        const dot = document.querySelector('.status-dot');
+        document.title = `header=${header.scrollWidth} actions=${actions.scrollWidth} dot=${dot.getBoundingClientRect().width}x${dot.getBoundingClientRect().height} vw=${window.innerWidth}`;
+      }));
+    </script>
   </body>
 </html>

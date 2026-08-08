@@ -2,7 +2,7 @@ import { app, BrowserWindow, Tray, nativeImage, ipcMain, shell } from 'electron'
 import path from 'node:path';
 import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
-import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher, loadRegistry, hasContent, verifyManifest, SwarmNode } from '@campvus/engine';
+import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher, hasContent, SwarmNode } from '@campvus/engine';
 import { createAgent, AgentEngineEvents, Agent } from './agent';
 import { createWindowController } from './window-controller';
 import { selectDesktopSeedingPolicy } from './seeding-policy-selection';
@@ -231,26 +231,23 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
   return { ok: true, config: merged };
 });
 
-// The registry (packages/engine's manifest-store.ts) is shared/global on
-// disk — filter to this student's own enrolled courses and re-verify each
-// manifest's signature ourselves (mirrors swarm-node.ts's own
-// verify-before-trust step; the two are independent readers of the same
-// registry.json, not a shared cache) rather than trusting anything a
-// tampered file might contain.
+// Reads the live swarm node's own knowledge (getKnownManifests) rather
+// than loadRegistry(paths) directly — the node's in-memory map is ahead of
+// whatever's on disk at any given instant, even though swarm-node.ts now
+// persists newly learned manifests back to registry.json as they arrive
+// (so a later restart still re-seeds correctly). getKnownManifests is
+// already course-scoped and signature-verified internally, so no
+// re-filtering is needed here.
 function getCourseFiles (): CourseFile[] {
-  const publicKeyHex = currentConfig?.institutionPublicKeyHex;
-  if (!publicKeyHex) return [];
-  const courseIdSet = new Set(currentConfig.courseIds ?? []);
-  return loadRegistry(paths)
-    .filter((m) => courseIdSet.has(m.courseId) && verifyManifest(m, publicKeyHex))
-    .map((m) => ({
-      courseId: m.courseId,
-      filename: m.filename,
-      hash: m.hash,
-      size: m.size,
-      timestamp: m.timestamp,
-      downloaded: hasContent(paths.contentStoreDir, m.hash),
-    }));
+  if (!swarmNode) return [];
+  return swarmNode.getKnownManifests().map((m) => ({
+    courseId: m.courseId,
+    filename: m.filename,
+    hash: m.hash,
+    size: m.size,
+    timestamp: m.timestamp,
+    downloaded: hasContent(paths.contentStoreDir, m.hash),
+  }));
 }
 
 ipcMain.handle('campvus:get-course-files', () => getCourseFiles());
@@ -380,6 +377,15 @@ const createMainWindow = (): { show(): void } => {
   const mainWindow = new BrowserWindow({
     width: 380,
     height: 520,
+    // A resizable tray utility, not a fixed popover — index.css scrolls the
+    // active panel under a pinned header, so any size in this range renders
+    // correctly. Bounds only keep it from being crushed unreadable or
+    // stretched past what a small settings panel should ever need.
+    resizable: true,
+    minWidth: 340,
+    minHeight: 440,
+    maxWidth: 640,
+    maxHeight: 860,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#f4f3ee', // @campvus/design --bg-primary; avoids a white flash before CSS loads
