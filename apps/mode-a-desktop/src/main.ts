@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
 import * as Sentry from '@sentry/electron/main';
+import { updateElectronApp } from 'update-electron-app';
 import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher, hasContent, SwarmNode } from '@campvus/engine';
 import { createAgent, AgentEngineEvents, Agent } from './agent';
 import { createWindowController } from './window-controller';
@@ -11,7 +12,7 @@ import { configureAutoLaunch } from './auto-launch';
 import { getPaths } from './paths';
 import { loadConfigFile, saveConfigFile, mergeConfig, validateConfig, DesktopConfig, PartialDesktopConfig } from './config-store';
 import { nodeRequest, NodeResponse } from './node-request';
-import { initMainObservability } from './observability';
+import { initMainObservability, updateLogger } from './observability';
 import type { AppState, SaveConfigResult, LoginModeBArgs, LoginModeBResult, CourseFile, OpenCourseFileResult } from './preload-api';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -22,6 +23,18 @@ if (started) {
 // Before anything else that could throw — after Squirrel's own early-quit
 // concern above, which isn't Sentry's to delay or risk.
 initMainObservability();
+
+// No-ops in dev (!app.isPackaged) and on Linux (Squirrel has no Linux
+// build, and update-electron-app only supports darwin/win32) — deb/rpm
+// installs keep updating manually/via their package manager, same as any
+// other Linux desktop app. Points at Electron's free hosted update service
+// (update.electronjs.org), which reads this public repo's GitHub Releases —
+// exactly what .github/workflows/desktop-ci.yml already publishes
+// (.nupkg/RELEASES, .zip) on every pushed `vX.Y.Z` tag.
+updateElectronApp({
+  repo: 'Thagana/campvus',
+  logger: updateLogger,
+});
 
 // ADR-0004: apps/mode-a-desktop seeds freely by default (network-aware
 // opt-out for a tethered/metered connection), not the Wi-Fi-only-by-default
@@ -469,6 +482,15 @@ const createMainWindow = (): { show(): void } => {
     maxHeight: 860,
     show: false,
     autoHideMenuBar: true,
+    // packagerConfig.icon (forge.config.ts) only sets the installed .exe's
+    // icon — the taskbar/titlebar icon for a running BrowserWindow (in dev
+    // and in a packaged build alike) needs to be set here separately.
+    // Packaged: forge.config.ts's `extraResource` copies assets/ next to
+    // resources/app.asar. Dev: __dirname is .vite/build, one level under
+    // the project root assets/ lives in.
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, 'assets/icon.png')
+      : path.join(__dirname, '../assets/icon.png'),
     // Windows 11's own resizable, titled windows (Settings, File Explorer,
     // Notepad) sit on Mica rather than a flat fill — same window shape as
     // this one, so we match it here instead of going frameless. index.css's

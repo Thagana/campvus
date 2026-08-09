@@ -1,0 +1,5 @@
+<svg width="290" height="64" viewBox="0 0 290 64" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="14" ry="14" fill="#0f6cbd"/>
+  <path d="M 46.22 43.93 A 18.56 18.56 0 1 1 46.22 20.07" fill="none" stroke="#ffffff" stroke-width="9.28"/>
+  <text x="80" y="46" font-family="Poppins, 'Segoe UI', system-ui, -apple-system, sans-serif" font-weight="600" font-size="40" fill="#242424">Campvus</text>
+</svg>

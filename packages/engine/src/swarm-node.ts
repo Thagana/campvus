@@ -16,6 +16,7 @@
 // apps/mode-a-headless's peer-node.ts) and by apps/mode-a-desktop's tray
 // agent (whose AgentEngineEvents interface this satisfies structurally).
 
+import crypto from 'crypto'
 import path from 'path'
 import { Duplex } from 'stream'
 import Hyperswarm from 'hyperswarm'
@@ -23,7 +24,7 @@ import b4a from 'b4a'
 import { loadRegistry, saveRegistry } from './manifest-store'
 import { listContentHashes, readContent, writeContent, touchContent } from './content-store'
 import { loadPublicKeyHex } from './identity'
-import { verifyManifest } from './crypto-utils'
+import { verifyManifest, signSessionStart, signLiveSegment, hashBuffer } from './crypto-utils'
 import { topicForCourse, topicForCourseAndRegion } from './topics'
 import { createLanDiscovery, LanDiscovery } from './lan-discovery'
 import {
@@ -35,15 +36,24 @@ import {
   WantMessage,
   DataMessage
 } from './swarm-protocol'
+import {
+  applySessionStartMessage,
+  applySegmentMessage,
+  planSegmentRelay,
+  SessionStartMessage,
+  SegmentMessage
+} from './live-segment-protocol'
 import { httpOriginFetcher, scheduleOriginFallback, OriginFetcher } from './origin'
+import { scheduleSegmentOriginFallback, SegmentOriginFetcher } from './live-segment-origin'
 import { httpManifestListFetcher, syncManifestsFromOrigin, FetchManifestList } from './manifest-sync'
 import { enforceStorageCap } from './eviction'
 import { alwaysAllowSeeding, fixedSeedingPolicy, networkAwareSeedingPolicy, SeedingPolicy } from './seeding-policy'
 import { createSyncStateTracker } from './sync-state'
+import { ingestBuffer, IngestResult } from './ingest'
 import { Paths } from './paths'
-import { SignedManifest } from './types'
+import { Keypair, SignedLiveSegment, SignedManifest, SignedSessionStart } from './types'
 
-type WireMessage = ManifestsMessage | WantMessage | DataMessage
+type WireMessage = ManifestsMessage | WantMessage | DataMessage | SessionStartMessage | SegmentMessage
 
 const DEFAULT_ORIGIN_TIMEOUT_MS = 15000
 // How long to wait for the peer we already asked before allowing a

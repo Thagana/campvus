@@ -290,6 +290,32 @@ What's still open on discovery specifically: cross-network conditions (different
 
 **Found while integration-testing, now solved (Phase 2):** Mode A's `peer-node.ts --origin` flag was pointed at a live `apps/mode-b-api` server to test whether it could serve as a real origin fallback. It couldn't, for two concrete reasons — see Open Question #9, now resolved: bearer-token auth (`auth/auth.ts`'s `bearer()` plugin, a new unauthenticated `GET /public-key` route) plus header support in `httpOriginFetcher`/`httpManifestListFetcher`, wired end-to-end through `apps/mode-a-desktop`'s new "Sign in to Campvus" flow.
 
+### 13.3 Live lesson streaming (Mode B, per ADR-0007)
+
+Protocol and access-control layers built and unit-tested; no real audio/video capture, encoding,
+or UI yet — see `.scratch/live-lesson-streaming/spec.md` for the full design and what's
+explicitly deferred.
+
+- **`packages/engine`'s `live-segment-protocol.ts`/`live-segment-origin.ts`** — session-start and
+  segment gossip (signed with the same institution keypair as manifests), flood-gossip fan-out,
+  and sequence-gap-triggered origin fallback. Pure logic, fully unit-tested (mirrors
+  `swarm-protocol.ts`'s existing test pattern).
+- **`swarm-node.ts`** — wired the above into real Hyperswarm connections: tracks every connected
+  peer (didn't exist before this — only a peer *count* was tracked), relays session-start/segment
+  messages to all other connected peers, catches up newly-joined peers on an in-progress session,
+  and exposes `startLiveSession()`/`publishSegment()`/`finishLiveSession()` for a teacher's
+  client to call. `finishLiveSession()` concatenates every segment this node published for a
+  session and runs it through the exact same `ingestBuffer` hash-sign-publish pipeline any other
+  course file uses — tested directly (no network needed for these three methods).
+- **`apps/mode-b-api`** — `liveSessions` table + `POST`/`GET /courses/:courseId/sessions`
+  (schedule / list), gated by the same `requireCourseRole` checks as course files. Tested against
+  a real Postgres instance (`test/sessions.test.ts`), passing.
+- **Not built:** actual audio/video capture and encoding (no ffmpeg or equivalent dependency yet),
+  the teacher/student UI in `apps/mode-a-desktop`/`apps/mode-b-web`, and a real HTTP endpoint
+  serving individual segments for origin fallback (`SegmentOriginFetcher` is defined and wired in
+  the engine, but nothing in `apps/mode-b-api` implements it yet — the fallback path is
+  architecturally complete but has nothing to call).
+
 ---
 
 *This consolidates the campus-focused pivot from the earlier general-purpose hybrid search-cache design, now split into two product modes sharing one engine (§3). The trust, signing, and seeding sections above are the parts most load-bearing for a first working version — the LAN discovery spike (open question 4) remains the single highest-priority validation step before deeper build-out on either mode.*
