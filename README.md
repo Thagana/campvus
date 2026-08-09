@@ -1,5 +1,7 @@
 # campvus
 
+[![Desktop CI & Release](https://github.com/Thagana/campvus/actions/workflows/desktop-ci.yml/badge.svg)](https://github.com/Thagana/campvus/actions/workflows/desktop-ci.yml)
+
 Campus P2P content distribution — a pnpm workspace.
 
 Campvus is a **nonprofit, open-source initiative**: the goal is cheap, resilient content
