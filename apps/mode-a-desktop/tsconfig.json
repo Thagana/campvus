@@ -4,7 +4,17 @@
     "allowJs": true,
     "noImplicitAny": true,
     "sourceMap": true,
-    "lib": ["ES2022", "DOM"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // Overrides the base config's Node16 module/resolution: this package's
+    // own source has no direct `require()` calls, and the actual
+    // build/bundling happens through Vite/esbuild (bundler resolution),
+    // not tsc (noEmit: true, type-checking only) or Node's runtime
+    // resolver. Node16 resolution rejects importing ESM-only packages
+    // (e.g. @phosphor-icons/react) from a file it considers CJS — bundler
+    // resolution matches how these renderer files are actually compiled.
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "forge.env.d.ts", "../../packages/engine/src/types/hyperswarm.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "forge.env.d.ts", "../../packages/engine/src/types/hyperswarm.d.ts"]
 }
