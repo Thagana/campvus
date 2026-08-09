@@ -99,6 +99,16 @@ async function pruneForeignPrebuilds (destNodeModules: string, platform: string,
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    // Base name (no extension) — electron-packager appends .ico on Windows,
+    // .icns on macOS, and falls back to icon.png on Linux. Source SVGs live
+    // in packages/design/assets (the canonical brand mark); these rasters
+    // are generated from that same "C" ring geometry as the tray icon.
+    icon: './assets/icon',
+    // `icon` above only sets the packaged exe/app-bundle's OS-level icon
+    // metadata — it doesn't put the file anywhere runtime code can read it.
+    // main.ts's BrowserWindow `icon` option (the taskbar/titlebar icon)
+    // needs assets/icon.png available at `process.resourcesPath` too.
+    extraResource: ['./assets'],
     // electron-packager names the app binary after `productName` ("campvus"),
     // but the Linux deb/rpm installers (electron-installer-debian/-redhat)
     // look for a binary matching package.json's `name` ("campvus-p2p") —
@@ -163,7 +173,7 @@ const config: ForgeConfig = {
       renderer: [
         {
           name: 'main_window',
-          config: 'vite.renderer.config.ts',
+          config: 'vite.renderer.config.mts',
         },
       ],
     }),

@@ -4,6 +4,7 @@
 
 import { app } from 'electron'
 import * as Sentry from '@sentry/electron/main'
+import type { ILogger } from 'update-electron-app'
 import { scrubBreadcrumb, scrubEvent } from './sentry-scrub'
 
 // process.env.SENTRY_DSN is a build-time constant by the time this runs —
@@ -36,4 +37,31 @@ export function initMainObservability (): void {
       urlQueryParams: false,
     },
   })
+}
+
+function formatArgs (args: unknown[]): string {
+  return args
+    .map((a) => (a instanceof Error ? a.stack ?? a.message : typeof a === 'string' ? a : JSON.stringify(a)))
+    .join(' ')
+}
+
+function record (level: Sentry.SeverityLevel, args: unknown[]): void {
+  const message = formatArgs(args)
+  const consoleFn = level === 'error' ? console.error : level === 'warning' ? console.warn : console.log
+  consoleFn(message)
+  // Update lifecycle events (feed URL, checking/available/downloaded/error)
+  // aren't worth their own Sentry issue, but as breadcrumbs they show up in
+  // the trail leading up to whatever crash report follows — same
+  // beforeBreadcrumb scrubbing as every other breadcrumb this app produces.
+  Sentry.addBreadcrumb({ category: 'updater', message, level })
+}
+
+// update-electron-app's ILogger methods are typed as single-string-arg, but
+// it actually calls them with multiple args (e.g. log('feedURL', feedURL))
+// — a rest-arg function is structurally assignable to that narrower type.
+export const updateLogger: ILogger = {
+  log: (...args: unknown[]) => record('info', args),
+  info: (...args: unknown[]) => record('info', args),
+  warn: (...args: unknown[]) => record('warning', args),
+  error: (...args: unknown[]) => record('error', args),
 }

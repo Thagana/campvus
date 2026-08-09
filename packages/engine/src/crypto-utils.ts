@@ -9,7 +9,10 @@
 import crypto from 'crypto'
 import nacl from 'tweetnacl'
 import b4a from 'b4a'
-import { ManifestFields, ManifestInput, SignedManifest } from './types'
+import {
+  LiveSegmentFields, LiveSegmentInput, ManifestFields, ManifestInput,
+  SessionStartFields, SessionStartInput, SignedLiveSegment, SignedManifest, SignedSessionStart
+} from './types'
 
 export function hashBuffer (buf: Uint8Array): string {
   return crypto.createHash('sha256').update(buf).digest('hex')
@@ -40,6 +43,65 @@ export function verifyManifest (manifest: ManifestInput, publicKey: string | Uin
   const { signature, ...fields } = manifest
   if (!signature) return false
   const message = b4a.from(canonicalManifestString(fields), 'utf8')
+  const sig = b4a.from(signature, 'hex')
+  const pub = typeof publicKey === 'string' ? b4a.from(publicKey, 'hex') : publicKey
+  try {
+    return nacl.sign.detached.verify(message, sig, pub)
+  } catch (err) {
+    return false
+  }
+}
+
+// Live-session announcements and segments carry the same trust requirement
+// as manifests (§6: one legitimate signer, the institution key) — a peer
+// must not be able to inject a fake session or forged segment into the
+// gossip. Signed with the same institution keypair the teacher's client
+// already holds to sign manifests.
+
+export function canonicalSessionStartString (s: SessionStartFields): string {
+  return JSON.stringify({ sessionId: s.sessionId, courseId: s.courseId, startedAt: s.startedAt })
+}
+
+export function signSessionStart (fields: SessionStartFields, secretKey: Uint8Array): SignedSessionStart {
+  const message = b4a.from(canonicalSessionStartString(fields), 'utf8')
+  const signature = nacl.sign.detached(message, secretKey)
+  return { ...fields, signature: b4a.toString(signature, 'hex') }
+}
+
+export function verifySessionStart (session: SessionStartInput, publicKey: string | Uint8Array): boolean {
+  const { signature, ...fields } = session
+  if (!signature) return false
+  const message = b4a.from(canonicalSessionStartString(fields), 'utf8')
+  const sig = b4a.from(signature, 'hex')
+  const pub = typeof publicKey === 'string' ? b4a.from(publicKey, 'hex') : publicKey
+  try {
+    return nacl.sign.detached.verify(message, sig, pub)
+  } catch (err) {
+    return false
+  }
+}
+
+export function canonicalLiveSegmentString (s: LiveSegmentFields): string {
+  return JSON.stringify({
+    sessionId: s.sessionId,
+    courseId: s.courseId,
+    seq: s.seq,
+    hash: s.hash,
+    size: s.size,
+    timestamp: s.timestamp
+  })
+}
+
+export function signLiveSegment (fields: LiveSegmentFields, secretKey: Uint8Array): SignedLiveSegment {
+  const message = b4a.from(canonicalLiveSegmentString(fields), 'utf8')
+  const signature = nacl.sign.detached(message, secretKey)
+  return { ...fields, signature: b4a.toString(signature, 'hex') }
+}
+
+export function verifyLiveSegment (segment: LiveSegmentInput, publicKey: string | Uint8Array): boolean {
+  const { signature, ...fields } = segment
+  if (!signature) return false
+  const message = b4a.from(canonicalLiveSegmentString(fields), 'utf8')
   const sig = b4a.from(signature, 'hex')
   const pub = typeof publicKey === 'string' ? b4a.from(publicKey, 'hex') : publicKey
   try {

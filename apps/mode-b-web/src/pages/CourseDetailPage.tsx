@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { Files, UploadSimple, UserPlus } from '@phosphor-icons/react'
-import { listManifests, uploadManifest, enrollStudent, getMySchool, SignedManifest, MySchool } from '../api'
+import { Files, UploadSimple, UserPlus, VideoCamera, CalendarPlus } from '@phosphor-icons/react'
+import { listManifests, uploadManifest, enrollStudent, getMySchool, listSessions, scheduleSession, SignedManifest, MySchool, LiveSession } from '../api'
 import { useAsyncForm } from '../hooks/useAsyncForm'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
@@ -21,6 +21,15 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
   const [enrollEmail, setEnrollEmail] = useState('')
   const { submitting: enrolling, error: enrollError, handleSubmit: submitEnroll } = useAsyncForm()
 
+  // Scheduling only (ADR-0007) — the actual live session runs entirely in
+  // apps/mode-a-desktop (a browser can't run Hyperswarm); this just lets a
+  // Teacher tell students when to be ready, per ticket 06's design.
+  const [sessions, setSessions] = useState<LiveSession[] | 'loading'>('loading')
+  const [sessionsLoadError, setSessionsLoadError] = useState<string | null>(null)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState('')
+  const { submitting: scheduling, error: scheduleError, handleSubmit: submitSchedule } = useAsyncForm()
+
   // Uploading (Teacher-only per-course, manifests.ts) and enrolling
   // (Staff-only school-wide, courses.ts) are both actions a Student can
   // never perform — a Teacher/Owner's school-wide role (ADR-0005) is
@@ -33,7 +42,12 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
     listManifests(courseId).then(setManifests).catch((err) => setLoadError(err instanceof Error ? err.message : String(err)))
   }
 
+  function refreshSessions (): void {
+    listSessions(courseId).then(setSessions).catch((err) => setSessionsLoadError(err instanceof Error ? err.message : String(err)))
+  }
+
   useEffect(refresh, [courseId])
+  useEffect(refreshSessions, [courseId])
   useEffect(() => { getMySchool().then(setSchool).catch(() => {}) }, [])
 
   function handleUpload (e: FormEvent): void {
@@ -53,6 +67,17 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
       showSuccess(`Enrolled ${enrollEmail}.`)
       setEnrollEmail('')
       setEnrollOpen(false)
+    })
+  }
+
+  function handleSchedule (e: FormEvent): void {
+    void submitSchedule(e, async () => {
+      const startTime = new Date(scheduleAt).getTime()
+      await scheduleSession(courseId, startTime)
+      showSuccess('Live session scheduled.')
+      setScheduleAt('')
+      setScheduleOpen(false)
+      refreshSessions()
     })
   }
 
@@ -84,6 +109,38 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
           </form>
         </section>
       )}
+
+      <section>
+        <div className="page-header">
+          <h3>Upcoming live sessions</h3>
+          {isStaff && (
+            <button type="button" className="btn btn-secondary" onClick={() => setScheduleOpen(true)}>
+              <CalendarPlus /> Schedule session
+            </button>
+          )}
+        </div>
+        {sessions === 'loading' && <Spinner label="Loading sessions…" />}
+        {sessionsLoadError && <p className="error">{sessionsLoadError}</p>}
+        {sessions !== 'loading' && sessions.length === 0 && (
+          <EmptyState
+            icon={<VideoCamera size={32} />}
+            title="No live sessions scheduled"
+            message={isStaff ? 'Schedule one above — start it from the Campvus desktop app when it\'s time.' : undefined}
+          />
+        )}
+        {sessions !== 'loading' && sessions.length > 0 && (
+          <table>
+            <thead><tr><th>Start time</th></tr></thead>
+            <tbody>
+              {[...sessions].sort((a, b) => a.startTime - b.startTime).map((s) => (
+                <tr key={s.id}>
+                  <td>{new Date(s.startTime).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <section>
         <div className="page-header">
@@ -130,6 +187,18 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
           </label>
           {enrollError && <p className="error">{enrollError}</p>}
           <button type="submit" className="btn btn-primary" disabled={enrolling}>{enrolling ? 'Enrolling…' : 'Enroll'}</button>
+        </form>
+      </Modal>
+
+      <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule a live session">
+        <form onSubmit={handleSchedule} className="modal-form">
+          <p className="muted">Students see this on the course page; you start the session itself from the Campvus desktop app when it's time.</p>
+          <label>
+            Start time
+            <input type="datetime-local" required autoFocus value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+          </label>
+          {scheduleError && <p className="error">{scheduleError}</p>}
+          <button type="submit" className="btn btn-primary" disabled={scheduling}>{scheduling ? 'Scheduling…' : 'Schedule'}</button>
         </form>
       </Modal>
     </div>

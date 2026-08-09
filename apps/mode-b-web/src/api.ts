@@ -25,9 +25,11 @@ export interface UploadResult {
 
 export class ApiError extends Error {
   status: number
-  constructor (message: string, status: number) {
+  code?: string
+  constructor (message: string, status: number, code?: string) {
     super(message)
     this.status = status
+    this.code = code
   }
 }
 
@@ -39,7 +41,14 @@ async function request<T> (path: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.error || `request failed with status ${res.status}`, res.status)
+    // Our own routes (guards.ts, routes/*.ts) respond with { error }.
+    // better-auth's own routes (organization invite/accept/etc.) respond
+    // with { message, code } instead (see APIError.from in
+    // @better-auth/core) — without this fallback, every better-auth
+    // failure surfaced as a generic "request failed with status 400"
+    // instead of e.g. "User is already invited to this organization".
+    const message = body.error || body.message || `request failed with status ${res.status}`
+    throw new ApiError(message, res.status, body.code)
   }
   return res.json() as Promise<T>
 }
@@ -92,6 +101,28 @@ export async function uploadManifest (courseId: string, file: File): Promise<Upl
     throw new ApiError(body.error || `upload failed with status ${res.status}`, res.status)
   }
   return res.json() as Promise<UploadResult>
+}
+
+// Scheduling only (ADR-0007, .scratch/live-lesson-streaming/spec.md) — the
+// live session itself (announcement, segment relay) is entirely swarm-side
+// via apps/mode-a-desktop, not reachable from this browser app at all (a
+// browser can't run Hyperswarm). This just lets a Teacher tell students
+// when to be ready.
+export interface LiveSession {
+  id: string
+  courseId: string
+  startTime: number
+}
+
+export function listSessions (courseId: string): Promise<LiveSession[]> {
+  return request(`/courses/${encodeURIComponent(courseId)}/sessions`)
+}
+
+export function scheduleSession (courseId: string, startTime: number): Promise<LiveSession> {
+  return request(`/courses/${encodeURIComponent(courseId)}/sessions`, {
+    method: 'POST',
+    body: JSON.stringify({ startTime })
+  })
 }
 
 // The signed-in user's own School (routes/school.ts) — a person belongs to

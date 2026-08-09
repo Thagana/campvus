@@ -19,7 +19,7 @@ export interface NodeResponse {
 
 export function nodeRequest (
   url: URL,
-  options: { method?: string; headers?: Record<string, string>; body?: string } = {},
+  options: { method?: string; headers?: Record<string, string>; body?: string | Buffer } = {},
 ): Promise<NodeResponse> {
   const client = url.protocol === 'https:' ? https : http;
   return new Promise((resolve, reject) => {

@@ -2,121 +2,12 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <title>Campvus</title>
   </head>
   <body>
-    <main class="app">
-      <header class="app-header">
-        <span class="eyebrow">Campvus</span>
-        <span class="header-actions">
-          <span class="status-dot" id="status-dot" data-status="idle"></span>
-          <button type="button" class="btn-ghost" id="files-toggle" aria-current="false"><i class="ph ph-folder-simple" aria-hidden="true"></i> Files</button>
-          <button type="button" class="btn-ghost settings-toggle" id="settings-toggle" aria-current="false"><i class="ph ph-gear" aria-hidden="true"></i> Settings</button>
-        </span>
-      </header>
-
-      <div class="panel-body">
-      <section id="status-section">
-        <section class="card status-card">
-          <i class="ph ph-pause-circle status-icon" id="status-icon" aria-hidden="true"></i>
-          <h1 id="status-label">Idle</h1>
-          <p class="muted" id="status-detail">0 peers connected</p>
-        </section>
-
-        <section class="error-banner" id="error-banner" hidden>
-          <i class="ph ph-warning-circle" aria-hidden="true"></i>
-          <span id="error-message"></span>
-        </section>
-
-        <section class="detail-list">
-          <div class="detail-row">
-            <span class="muted">Peers connected</span>
-            <span class="detail-value" id="peer-count">0</span>
-          </div>
-          <div class="detail-row">
-            <span class="muted">Seeding</span>
-            <span class="detail-value" id="seeding-value">Allowed</span>
-          </div>
-        </section>
-      </section>
-
-      <section class="card files-card" id="files-section" hidden>
-        <h2>Course files</h2>
-        <p class="muted" id="files-empty">No files yet — check back once syncing finds some.</p>
-        <div id="files-list"></div>
-        <p class="error" id="files-error" hidden><i class="ph ph-warning-circle" aria-hidden="true"></i> <span id="files-error-text"></span></p>
-        <div class="row">
-          <button type="button" class="btn btn-secondary" id="files-close"><i class="ph ph-arrow-left" aria-hidden="true"></i> Close</button>
-        </div>
-      </section>
-
-      <section class="card settings-card" id="settings-section" hidden>
-        <h2>Sign in to Campvus</h2>
-        <p class="muted">Signs in against your school's Campvus server and fills in the fields below automatically — the manual fields further down are only for a plain LMS origin, not a Campvus account.</p>
-        <form id="login-form">
-          <label>
-            Campvus server URL
-            <input type="text" id="field-modeBUrl" name="modeBUrl" placeholder="https://campvus.example.edu" required />
-          </label>
-          <label>
-            Email
-            <input type="email" id="field-email" name="email" required />
-          </label>
-          <label>
-            Password
-            <div class="input-with-action">
-              <input type="password" id="field-password" name="password" required />
-              <button type="button" class="input-action" id="password-toggle" aria-label="Show password">
-                <i class="ph ph-eye" id="password-toggle-icon" aria-hidden="true"></i>
-              </button>
-            </div>
-          </label>
-
-          <p class="error" id="login-error" hidden><i class="ph ph-warning-circle" aria-hidden="true"></i> <span id="login-error-text"></span></p>
-          <p class="muted" id="login-status" hidden></p>
-
-          <div class="row">
-            <button type="submit" class="btn btn-primary" id="login-submit">Sign in</button>
-          </div>
-        </form>
-
-        <h2>Settings</h2>
-        <form id="settings-form">
-          <label>
-            Course IDs <span class="muted">(comma-separated — you're usually enrolled in more than one)</span>
-            <input type="text" id="field-courseIds" name="courseIds" placeholder="COMSCI214, MATH101" required />
-          </label>
-          <label>
-            Institution public key (hex)
-            <input type="text" id="field-institutionPublicKeyHex" name="institutionPublicKeyHex" class="mono" required />
-          </label>
-          <label>
-            Origin URL <span class="muted">(optional)</span>
-            <input type="text" id="field-originUrl" name="originUrl" placeholder="https://lms.example.edu" />
-          </label>
-          <label>
-            Manifest origin URL <span class="muted">(optional — catches up on manifests published while offline)</span>
-            <input type="text" id="field-manifestOriginUrl" name="manifestOriginUrl" placeholder="https://lms.example.edu" />
-          </label>
-          <label>
-            Region <span class="muted">(optional, Tier 2)</span>
-            <input type="text" id="field-region" name="region" placeholder="e.g. campus-west" />
-          </label>
-          <label>
-            Max store size in bytes <span class="muted">(optional)</span>
-            <input type="text" id="field-maxStoreBytes" name="maxStoreBytes" placeholder="e.g. 5000000000" />
-          </label>
-
-          <p class="error" id="settings-error" hidden><i class="ph ph-warning-circle" aria-hidden="true"></i> <span id="settings-error-text"></span></p>
-
-          <div class="row">
-            <button type="submit" class="btn btn-primary" id="settings-save"><i class="ph ph-check" aria-hidden="true"></i> Save</button>
-            <button type="button" class="btn btn-secondary" id="settings-cancel">Cancel</button>
-          </div>
-        </form>
-      </section>
-      </div>
-    </main>
-    <script type="module" src="/src/renderer.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/renderer.tsx"></script>
   </body>
 </html>
