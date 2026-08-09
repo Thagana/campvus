@@ -1,10 +1,14 @@
 import { app, BrowserWindow, Tray, nativeImage, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import started from 'electron-squirrel-startup';
 import * as Sentry from '@sentry/electron/main';
 import { updateElectronApp } from 'update-electron-app';
-import { networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher, hasContent, SwarmNode } from '@campvus/engine';
+import {
+  networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher,
+  hasContent, hashBuffer, SwarmNode, SignedSessionStart, SignedLiveSegment
+} from '@campvus/engine';
 import { createAgent, AgentEngineEvents, Agent } from './agent';
 import { createWindowController } from './window-controller';
 import { selectDesktopSeedingPolicy } from './seeding-policy-selection';
@@ -12,8 +16,13 @@ import { configureAutoLaunch } from './auto-launch';
 import { getPaths } from './paths';
 import { loadConfigFile, saveConfigFile, mergeConfig, validateConfig, DesktopConfig, PartialDesktopConfig } from './config-store';
 import { nodeRequest, NodeResponse } from './node-request';
+import { buildMultipartUpload } from './live-session-client';
 import { initMainObservability, updateLogger } from './observability';
-import type { AppState, SaveConfigResult, LoginModeBArgs, LoginModeBResult, CourseFile, OpenCourseFileResult } from './preload-api';
+import type {
+  AppState, SaveConfigResult, LoginModeBArgs, LoginModeBResult, CourseFile, OpenCourseFileResult,
+  LiveCourse, StartLiveSessionResult, PublishLiveSegmentArgs, PublishLiveSegmentResult,
+  FinishLiveSessionArgs, FinishLiveSessionResult, LiveEvent
+} from './preload-api';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -89,6 +98,12 @@ const configFile = path.join(paths.rootDir, 'desktop-config.json');
 let swarmNode: SwarmNode | undefined;
 let agent: Agent;
 let currentConfig: DesktopConfig;
+// Next seq to assign per live session this device is the source for — main
+// owns this counter (not the renderer) so a segment's sequence number is
+// authoritative regardless of how the renderer's capture loop is timed.
+// gap-detection on the receiving side (swarm-node.ts) relies on these
+// actually being sequential.
+const liveSessionSeq = new Map<string, number>();
 
 function wireAgent (nextAgent: Agent): void {
   agent = nextAgent;
@@ -125,6 +140,39 @@ async function fetchModeBCourseIds (base: URL, headers: Record<string, string>):
   if (!res.ok) throw new Error('Could not fetch your courses.');
   const courses = await res.json() as Array<{ id: string }>;
   return courses.map((c) => c.id);
+}
+
+// Same GET /courses call as fetchModeBCourseIds, but keeps the role field
+// (routes/courses.ts already returns it) — the Live Session panel needs to
+// know which courses this account can start a session for ('teacher') vs.
+// only watch ('student'), which fetchModeBCourseIds throws away.
+async function fetchModeBCourses (base: URL, headers: Record<string, string>): Promise<LiveCourse[]> {
+  const res = await nodeRequest(new URL('courses', base), { headers });
+  if (!res.ok) throw new Error('Could not fetch your courses.');
+  return await res.json() as LiveCourse[];
+}
+
+// Shared by every Mode B call the live-session flow makes (list courses,
+// get a signature, upload the recording) — same normalization
+// refreshModeBCourses already does ad hoc, factored out since live
+// sessions need it in several IPC handlers, not just one background timer.
+function modeBBaseUrl (): URL | undefined {
+  if (!currentConfig.manifestOriginUrl) return undefined;
+  try {
+    const url = currentConfig.manifestOriginUrl;
+    return new URL(url.endsWith('/') ? url : url + '/');
+  } catch {
+    return undefined;
+  }
+}
+
+// Electron IPC's structured-clone transfer needs a real standalone
+// ArrayBuffer, not a Node Buffer view — a Buffer can (and often does, for
+// small allocations) share its underlying .buffer with unrelated data
+// outside its own byteOffset/byteLength, so this must slice rather than
+// hand back .buffer directly.
+function toArrayBuffer (buf: Buffer): ArrayBuffer {
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 }
 
 function sameCourseIds (a: string[], b: string[]): boolean {
@@ -197,6 +245,25 @@ function configureEngine (config: DesktopConfig): void {
       maxStoreBytes: config.maxStoreBytes,
       seedingPolicy,
       region: config.region,
+    });
+    // Live lesson streaming (ADR-0007): pushes straight to the renderer as
+    // the swarm learns them — the Live Session panel doesn't poll, it just
+    // renders whatever arrives here, same "main pushes, renderer renders"
+    // shape state-changed already uses.
+    swarmNode.onSessionStart((session) => {
+      windowContents?.send('campvus:live-event', {
+        type: 'session-start',
+        session: { sessionId: session.sessionId, courseId: session.courseId, startedAt: session.startedAt },
+      } satisfies LiveEvent);
+    });
+    swarmNode.onSegment((segment, bytes) => {
+      windowContents?.send('campvus:live-event', {
+        type: 'segment',
+        sessionId: segment.sessionId,
+        courseId: segment.courseId,
+        seq: segment.seq,
+        bytes: toArrayBuffer(bytes),
+      } satisfies LiveEvent);
     });
     wireAgent(createAgent(swarmNode));
   } else {
@@ -323,6 +390,110 @@ ipcMain.handle('campvus:login-mode-b', async (_event, args: LoginModeBArgs): Pro
   saveConfigFile(configFile, merged);
   await restartEngine(merged as DesktopConfig);
   return { ok: true, config: merged };
+});
+
+// Live lesson streaming (ADR-0007). All four handlers below require a
+// live Mode B session (modeBToken + manifestOriginUrl) — Mode A's
+// manual-config path has no teacher/student role concept to build this
+// on (§3.1), and there's nowhere to get a live-signatures signature from
+// without a real apps/mode-b-api origin.
+
+ipcMain.handle('campvus:list-my-courses', async (): Promise<LiveCourse[]> => {
+  const base = modeBBaseUrl();
+  if (!base || !currentConfig.modeBToken) return [];
+  try {
+    return await fetchModeBCourses(base, { Authorization: `Bearer ${currentConfig.modeBToken}` });
+  } catch (err) {
+    console.error('list-my-courses failed:', err instanceof Error ? err.message : String(err));
+    return [];
+  }
+});
+
+ipcMain.handle('campvus:start-live-session', async (_event, courseId: string): Promise<StartLiveSessionResult> => {
+  if (!swarmNode) return { ok: false, error: 'Engine is not running yet — try again in a moment.' };
+  const base = modeBBaseUrl();
+  if (!base || !currentConfig.modeBToken) return { ok: false, error: 'Sign in to Campvus first (Settings → Sign in to Campvus).' };
+
+  const sessionId = crypto.randomUUID();
+  const startedAt = Date.now();
+  try {
+    const res = await nodeRequest(new URL(`courses/${encodeURIComponent(courseId)}/live-signatures`, base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${currentConfig.modeBToken}` },
+      body: JSON.stringify({ kind: 'session-start', sessionId, startedAt }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => undefined) as { error?: string } | undefined;
+      return { ok: false, error: body?.error || 'Could not start the session — are you a Teacher for this course?' };
+    }
+    const session = await res.json() as SignedSessionStart;
+    swarmNode.announceSignedSession(session);
+    liveSessionSeq.set(sessionId, 0);
+    return { ok: true, session: { sessionId, courseId, startedAt } };
+  } catch (err) {
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { extra: { ipcHandler: 'campvus:start-live-session' } });
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('campvus:publish-live-segment', async (_event, args: PublishLiveSegmentArgs): Promise<PublishLiveSegmentResult> => {
+  if (!swarmNode) return { ok: false, error: 'Engine is not running yet.' };
+  const base = modeBBaseUrl();
+  if (!base || !currentConfig.modeBToken) return { ok: false, error: 'Sign in to Campvus first.' };
+
+  const bytes = Buffer.from(args.bytes);
+  const seq = liveSessionSeq.get(args.sessionId) ?? 0;
+  const hash = hashBuffer(bytes);
+  try {
+    const res = await nodeRequest(new URL(`courses/${encodeURIComponent(args.courseId)}/live-signatures`, base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${currentConfig.modeBToken}` },
+      body: JSON.stringify({ kind: 'segment', sessionId: args.sessionId, seq, hash, size: bytes.length, timestamp: Date.now() }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => undefined) as { error?: string } | undefined;
+      return { ok: false, error: body?.error || 'Could not publish this segment.' };
+    }
+    const segment = await res.json() as SignedLiveSegment;
+    swarmNode.relaySignedSegment(segment, bytes);
+    liveSessionSeq.set(args.sessionId, seq + 1);
+    return { ok: true };
+  } catch (err) {
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { extra: { ipcHandler: 'campvus:publish-live-segment' } });
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+// The recording has no signature of its own (this device never holds the
+// institution secret key) — it publishes exactly like a regular file
+// upload, through the same multipart route routes/manifests.ts already
+// exposes for a teacher's ordinary course-file upload.
+ipcMain.handle('campvus:finish-live-session', async (_event, args: FinishLiveSessionArgs): Promise<FinishLiveSessionResult> => {
+  if (!swarmNode) return { ok: false, error: 'Engine is not running yet.' };
+  const base = modeBBaseUrl();
+  if (!base || !currentConfig.modeBToken) return { ok: false, error: 'Sign in to Campvus first.' };
+
+  const taken = swarmNode.takeSessionRecording(args.sessionId);
+  liveSessionSeq.delete(args.sessionId);
+  if (!taken) return { ok: false, error: 'No segments were published for this session.' };
+
+  const { body, contentType } = buildMultipartUpload(args.filename, taken.bytes);
+  try {
+    const res = await nodeRequest(new URL(`courses/${encodeURIComponent(args.courseId)}/manifests`, base), {
+      method: 'POST',
+      headers: { 'content-type': contentType, Authorization: `Bearer ${currentConfig.modeBToken}` },
+      body,
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => undefined) as { error?: string } | undefined;
+      return { ok: false, error: errBody?.error || 'Could not publish the recording.' };
+    }
+    const { manifest, deduped } = await res.json() as { manifest: { hash: string }, deduped: boolean };
+    return { ok: true, manifestHash: manifest.hash, deduped };
+  } catch (err) {
+    Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { extra: { ipcHandler: 'campvus:finish-live-session' } });
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 });
 
 // Reads the live swarm node's own knowledge (getKnownManifests) rather

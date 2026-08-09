@@ -103,6 +103,28 @@ export async function uploadManifest (courseId: string, file: File): Promise<Upl
   return res.json() as Promise<UploadResult>
 }
 
+// Scheduling only (ADR-0007, .scratch/live-lesson-streaming/spec.md) — the
+// live session itself (announcement, segment relay) is entirely swarm-side
+// via apps/mode-a-desktop, not reachable from this browser app at all (a
+// browser can't run Hyperswarm). This just lets a Teacher tell students
+// when to be ready.
+export interface LiveSession {
+  id: string
+  courseId: string
+  startTime: number
+}
+
+export function listSessions (courseId: string): Promise<LiveSession[]> {
+  return request(`/courses/${encodeURIComponent(courseId)}/sessions`)
+}
+
+export function scheduleSession (courseId: string, startTime: number): Promise<LiveSession> {
+  return request(`/courses/${encodeURIComponent(courseId)}/sessions`, {
+    method: 'POST',
+    body: JSON.stringify({ startTime })
+  })
+}
+
 // The signed-in user's own School (routes/school.ts) — a person belongs to
 // at most one (ADR-0005). Needed before inviteToSchool below, since
 // better-auth's invite-member endpoint requires organizationId in its

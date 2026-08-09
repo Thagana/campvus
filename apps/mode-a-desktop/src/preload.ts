@@ -10,7 +10,7 @@ import * as Sentry from '@sentry/electron/renderer'
 Sentry.init()
 
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
-import type { AppState, CampvusApi } from './preload-api'
+import type { AppState, CampvusApi, LiveEvent } from './preload-api'
 
 const api: CampvusApi = {
   getState: () => ipcRenderer.invoke('campvus:get-state'),
@@ -23,7 +23,16 @@ const api: CampvusApi = {
   saveConfig: (config) => ipcRenderer.invoke('campvus:save-config', config),
   loginModeB: (args) => ipcRenderer.invoke('campvus:login-mode-b', args),
   getCourseFiles: () => ipcRenderer.invoke('campvus:get-course-files'),
-  openCourseFile: (hash) => ipcRenderer.invoke('campvus:open-course-file', hash)
+  openCourseFile: (hash) => ipcRenderer.invoke('campvus:open-course-file', hash),
+  listMyCourses: () => ipcRenderer.invoke('campvus:list-my-courses'),
+  startLiveSession: (courseId) => ipcRenderer.invoke('campvus:start-live-session', courseId),
+  publishLiveSegment: (args) => ipcRenderer.invoke('campvus:publish-live-segment', args),
+  finishLiveSession: (args) => ipcRenderer.invoke('campvus:finish-live-session', args),
+  onLiveEvent: (handler) => {
+    const listener = (_event: IpcRendererEvent, liveEvent: LiveEvent): void => handler(liveEvent)
+    ipcRenderer.on('campvus:live-event', listener)
+    return () => ipcRenderer.removeListener('campvus:live-event', listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('campvus', api)

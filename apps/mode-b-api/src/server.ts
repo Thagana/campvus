@@ -12,6 +12,7 @@ import { registerCourseRoutes } from './routes/courses'
 import { registerSchoolRoutes } from './routes/school'
 import { registerManifestRoutes } from './routes/manifests'
 import { registerSessionRoutes } from './routes/sessions'
+import { registerLiveSigningRoutes } from './routes/live-signing'
 import { registerContentRoutes } from './routes/content'
 import { registerAdminRoutes } from './routes/admin'
 import { registerPublicKeyRoutes } from './routes/public-key'
@@ -51,6 +52,7 @@ export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
     registerSchoolRoutes(app, deps.db),
     registerManifestRoutes(app, deps.db, deps.paths, deps.keypair),
     registerSessionRoutes(app, deps.db),
+    registerLiveSigningRoutes(app, deps.db, deps.keypair),
     registerContentRoutes(app, deps.db, deps.paths),
     registerAdminRoutes(app, deps.db),
     registerPublicKeyRoutes(app, deps.keypair),
@@ -64,6 +66,13 @@ export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
   // doesn't fail to boot.
   if (fs.existsSync(WEB_DIST)) {
     await app.register(staticPlugin, { root: WEB_DIST })
+
+    // The marketing page (public/landing.html, built as a plain static
+    // file — no React) owns the bare root instead of the SPA's index.html.
+    // Registered as an explicit route so it wins over @fastify/static's own
+    // default "serve index.html for /" behavior; the teacher app itself
+    // lives at /login and beyond, reached via the landing page's CTAs.
+    app.get('/', (request, reply) => reply.sendFile('landing.html'))
 
     // mode-b-web has no server-rendered routing — every real page (e.g.
     // /accept-invite) is client-side only. @fastify/static above only ever

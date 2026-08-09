@@ -157,6 +157,25 @@ export interface SwarmNode {
   // if it never published any segment for this session (nothing to
   // publish, or this node was never the source).
   finishLiveSession (sessionId: string, filename: string): IngestResult
+  // Counterpart to startLiveSession/publishSegment for a node with no local
+  // keypair (e.g. apps/mode-a-desktop, which per docs/ARCHITECTURE.md §13.1
+  // never holds the institution secret key — only apps/mode-b-api does).
+  // Takes an already-signed object obtained from a trusted signing proxy
+  // (a teacher-only endpoint that signs server-side and returns just the
+  // signature) and floods it exactly like the locally-signed path does —
+  // the institution secret key never has to leave the server. Does not
+  // verify the signature before flooding (it trusts its caller, the same
+  // way publishSegment trusts its caller to have produced real bytes);
+  // receiving peers still verify independently via applySessionStartMessage/
+  // applySegmentMessage, same as any other peer's announcement.
+  announceSignedSession (session: SignedSessionStart): void
+  relaySignedSegment (segment: SignedLiveSegment, bytes: Buffer): void
+  // Pulls and clears the buffered recording for a session (concatenated
+  // segment bytes, in publish order) without signing or ingesting it —
+  // for a caller with no local keypair that will publish it itself via a
+  // different route (e.g. an HTTP multipart upload). Returns undefined if
+  // nothing was ever published for this session on this node.
+  takeSessionRecording (sessionId: string): { courseId: string, bytes: Buffer } | undefined
   onSessionStart (handler: (session: SignedSessionStart) => void): void
   onSegment (handler: (segment: SignedLiveSegment, bytes: Buffer) => void): void
 }
@@ -253,6 +272,46 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
       const conn = connectedPeers.get(id)
       if (conn) send(conn, msg)
     }
+  }
+
+  // Shared by startLiveSession (signs locally) and announceSignedSession (a
+  // pre-signed session from the signing-proxy path) — records it as known
+  // and floods to every currently connected peer.
+  function floodSession (session: SignedSessionStart): void {
+    knownSessions.set(session.sessionId, session)
+    const msg: SessionStartMessage = { type: 'session-start', session }
+    for (const conn of connectedPeers.values()) send(conn, msg)
+    log(`live session "${session.sessionId}" started for course "${session.courseId}"`)
+  }
+
+  // Shared by publishSegment (signs locally) and relaySignedSegment (a
+  // pre-signed segment from the signing-proxy path) — records dedup/gap
+  // state, floods to every connected peer, and buffers it for
+  // finishLiveSession the same way regardless of who did the signing.
+  function floodSegment (segment: SignedLiveSegment, bytes: Buffer): void {
+    seenSegments.add(`${segment.sessionId}:${segment.seq}`)
+    const existing = lastSeqBySession.get(segment.sessionId)
+    if (existing === undefined || segment.seq > existing) lastSeqBySession.set(segment.sessionId, segment.seq)
+    const msg: SegmentMessage = { type: 'segment', segment, content: bytes.toString('base64') }
+    for (const conn of connectedPeers.values()) send(conn, msg)
+
+    const recording = sessionRecordings.get(segment.sessionId) || { courseId: segment.courseId, chunks: [] }
+    recording.chunks.push(bytes)
+    sessionRecordings.set(segment.sessionId, recording)
+  }
+
+  // Pulls and clears whatever has been buffered for a session (via
+  // publishSegment or relaySignedSegment) — concatenated in the order
+  // those were called, per their own sequential-seq contract. Used by
+  // finishLiveSession (which also signs and ingests it locally) and
+  // exposed directly for a caller with no local keypair — e.g.
+  // apps/mode-a-desktop — that needs the raw bytes to upload through the
+  // existing HTTP manifest route instead.
+  function takeSessionRecording (sessionId: string): { courseId: string, bytes: Buffer } | undefined {
+    const recording = sessionRecordings.get(sessionId)
+    if (!recording || recording.chunks.length === 0) return undefined
+    sessionRecordings.delete(sessionId)
+    return { courseId: recording.courseId, bytes: Buffer.concat(recording.chunks) }
   }
 
   function considerMissingSegment (sessionId: string, seq: number): void {
@@ -517,11 +576,12 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
         courseId,
         startedAt: Date.now()
       }, keypair.secretKey)
-      knownSessions.set(session.sessionId, session)
-      const msg: SessionStartMessage = { type: 'session-start', session }
-      for (const conn of connectedPeers.values()) send(conn, msg)
-      log(`live session "${session.sessionId}" started for course "${courseId}"`)
+      floodSession(session)
       return session
+    },
+
+    announceSignedSession (session: SignedSessionStart): void {
+      floodSession(session)
     },
 
     publishSegment (sessionId: string, courseId: string, seq: number, bytes: Buffer): SignedLiveSegment {
@@ -532,32 +592,27 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
         size: bytes.length,
         timestamp: Date.now()
       }, keypair.secretKey)
-      seenSegments.add(`${sessionId}:${seq}`)
-      const existing = lastSeqBySession.get(sessionId)
-      if (existing === undefined || seq > existing) lastSeqBySession.set(sessionId, seq)
-      const msg: SegmentMessage = { type: 'segment', segment, content: bytes.toString('base64') }
-      for (const conn of connectedPeers.values()) send(conn, msg)
-
-      const recording = sessionRecordings.get(sessionId) || { courseId, chunks: [] }
-      recording.chunks.push(bytes)
-      sessionRecordings.set(sessionId, recording)
-
+      floodSegment(segment, bytes)
       return segment
+    },
+
+    relaySignedSegment (segment: SignedLiveSegment, bytes: Buffer): void {
+      floodSegment(segment, bytes)
     },
 
     finishLiveSession (sessionId: string, filename: string): IngestResult {
       if (!keypair) throw new Error('finishLiveSession requires a keypair (this node was not configured with one)')
-      const recording = sessionRecordings.get(sessionId)
-      if (!recording || recording.chunks.length === 0) {
+      const taken = takeSessionRecording(sessionId)
+      if (!taken) {
         throw new Error(`no published segments to finish for session "${sessionId}" — this node never published to it`)
       }
 
-      const buf = Buffer.concat(recording.chunks)
-      const result = ingestBuffer({ courseId: recording.courseId, filename, buf, keypair, paths })
-      sessionRecordings.delete(sessionId)
+      const result = ingestBuffer({ courseId: taken.courseId, filename, buf: taken.bytes, keypair, paths })
       log(`live session "${sessionId}" recording published as "${filename}" (${result.deduped ? 'deduped' : 'new'})`)
       return result
     },
+
+    takeSessionRecording,
 
     async start (): Promise<void> {
       swarm = new Hyperswarm()
