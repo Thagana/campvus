@@ -74,16 +74,18 @@ following this repo's `spec.md` + `issues/` convention.
   resolved via discussion — code spike deferred to implementation): flood/gossip fan-out (same
   pattern as manifest gossip), ~6-10s segments. Flood-gossip solves the relay-dropout robustness
   problem structurally — no single-parent dependency, no explicit tree-rebuild logic needed.
+- [Scheduling UX Detail](issues/08-scheduling-ux-detail.md) (grilling, resolved): one-off only
+  (no recurring), `startTime` must reject a past timestamp (not yet built — real gap), and a
+  Teacher can cancel/edit a scheduled session (not yet built — real gap). Surfaced on
+  `CourseDetailPage` as-built, no change there. `spec.md` updated to call for the two gaps
+  explicitly rather than leaving scheduling UX as an open implementation question.
+- [In-Session Chat Scope](issues/09-in-session-chat-scope.md) (grilling, resolved): deferred to a
+  future follow-up effort — this spec ships audio/video only, matching ADR-0007's one-way-broadcast
+  analysis. `spec.md`'s Out of Scope section updated from "not decided" to a settled deferral.
 
 ## Not yet specified
 
-- Scheduling UX detail — [Live Session Discovery & Notification](issues/06-live-session-discovery-notification.md)
-  settled *that* sessions are scheduled with a Teacher-set start time, but not the exact
-  scheduling flow/UI (how far in advance, recurring vs. one-off, where it's surfaced) —
-  implementation-level detail, not an architecture question.
-- In-session interaction surface — text chat during a live session — one-way broadcast for audio/
-  video is confirmed, but chat's own scope (in this spec vs. later) isn't decided yet. Not named
-  in this map's destination, so not blocking the spec; flagged there as a known open question.
+(none — every fog item has graduated into a resolved ticket.)
 
 ## Out of scope
 
