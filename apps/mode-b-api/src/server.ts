@@ -26,11 +26,22 @@ export interface ServerDeps {
 
 const WEB_DIST = path.join(__dirname, '..', '..', 'mode-b-web', 'dist')
 
+// Fastify defaults bodyLimit to 1 MiB, and @fastify/multipart's own
+// fileSize limit falls back to exactly that (options.limits?.fileSize ||
+// fastify.initialConfig.bodyLimit — see @fastify/multipart/index.js) unless
+// overridden here. Any real course-file upload — and especially a live
+// session's recording (routes/sessions.ts's finish flow, ADR-0007) —
+// blows past 1 MiB almost immediately, so the effective default was never
+// actually usable for real content, only small test fixtures. 512 MiB
+// comfortably covers a multi-segment recording without removing the cap
+// entirely.
+const MAX_UPLOAD_BYTES = 512 * 1024 * 1024
+
 export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
   // trustProxy: this sits behind Fly's edge proxy (TLS terminates there,
   // plain HTTP internally) — without it req.ip/req.protocol would reflect
   // the proxy hop, not the real client.
-  const app = fastify({ logger: false, trustProxy: true })
+  const app = fastify({ logger: false, trustProxy: true, bodyLimit: MAX_UPLOAD_BYTES })
 
   // Unauthenticated by design — Fly's http_service health check polls this.
   app.get('/healthz', async () => ({ ok: true }))

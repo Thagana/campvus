@@ -217,7 +217,7 @@ Two integration shapes, both still valid, now understood as sub-options *within*
 | Mode B ingestion | Direct upload API — Fastify, `apps/mode-b-api`, calls `@campvus/engine`'s `ingestBuffer` directly |
 | Mode B infra | Own auth/enrollment: Postgres via `postgres` (postgres.js — no native compile step, unlike `pg-native`/`better-sqlite3`) through Drizzle's `postgres-js` driver, schema-tracked via `drizzle-kit` migrations (`apps/mode-b-api/drizzle/`), DB-backed sessions, `@node-rs/argon2` password hashing, Schools as better-auth Organizations ([ADR-0005](./adr/0005-schools-as-organizations-fixed-roles.md)). Own origin storage: local filesystem via `@campvus/engine`'s content-store, served over HTTP (`GET /content/:hash`), gated by course enrollment. |
 | Mode B teacher UI | React + Vite (`apps/mode-b-web`), served as static assets by `apps/mode-b-api` itself (`@fastify/static`) in production; Vite dev server proxies API calls in dev. Same-origin either way — no CORS/token handling needed. |
-| Mode B student UI | **Not built.** Needs real swarm participation (§5.5), which needs a Node/Electron shell like `apps/mode-a-desktop` — a browser can't run Hyperswarm. |
+| Mode B student UI | **Mostly built, unvalidated** — not a separate app: `apps/mode-a-desktop`'s "Sign in to Campvus" flow runs the same swarm engine Mode A uses (a browser can't run Hyperswarm). Real peer-to-peer swarming between two Mode-B-authenticated clients has never been run end to end; only the origin-fallback path is tested. See §3.2/§13.2. |
 | Mobile packaging | **Parked** — Bare mobile tooling / Pear vs. bare-RN + `nodejs-mobile` both viable in theory, neither chosen; see [ADR-0002](./adr/0002-electron-desktop-client-mobile-parked.md) |
 | Desktop packaging | Electron (`apps/mode-a-desktop`), wraps `packages/engine` directly — no native-mobile bindings needed, Node runs Hyperswarm natively |
 | Repo structure | pnpm workspace (`packages/engine`, `apps/mode-a-headless` CLI spike, `apps/mode-a-desktop` Electron client, `apps/mode-b-api` backend, `apps/mode-b-web` teacher UI); `apps/campvus` (Expo/React Native) is the parked mobile scaffold, unwired |
@@ -292,9 +292,8 @@ What's still open on discovery specifically: cross-network conditions (different
 
 ### 13.3 Live lesson streaming (Mode B, per ADR-0007)
 
-Protocol and access-control layers built and unit-tested; no real audio/video capture, encoding,
-or UI yet — see `.scratch/live-lesson-streaming/spec.md` for the full design and what's
-explicitly deferred.
+Full path built end to end — scheduling, capture, relay, and playback — and unit-tested; see
+`.scratch/live-lesson-streaming/spec.md` for the full design and what's still explicitly deferred.
 
 - **`packages/engine`'s `live-segment-protocol.ts`/`live-segment-origin.ts`** — session-start and
   segment gossip (signed with the same institution keypair as manifests), flood-gossip fan-out,
@@ -306,15 +305,35 @@ explicitly deferred.
   and exposes `startLiveSession()`/`publishSegment()`/`finishLiveSession()` for a teacher's
   client to call. `finishLiveSession()` concatenates every segment this node published for a
   session and runs it through the exact same `ingestBuffer` hash-sign-publish pipeline any other
-  course file uses — tested directly (no network needed for these three methods).
+  course file uses — tested directly (no network needed for these three methods). A second entry
+  point — `announceSignedSession()`/`relaySignedSegment()`/`takeSessionRecording()` — lets a
+  **keypair-less client** (see the signing-proxy note below) drive the same relay without ever
+  holding the secret key itself.
 - **`apps/mode-b-api`** — `liveSessions` table + `POST`/`GET /courses/:courseId/sessions`
   (schedule / list), gated by the same `requireCourseRole` checks as course files. Tested against
-  a real Postgres instance (`test/sessions.test.ts`), passing.
-- **Not built:** actual audio/video capture and encoding (no ffmpeg or equivalent dependency yet),
-  the teacher/student UI in `apps/mode-a-desktop`/`apps/mode-b-web`, and a real HTTP endpoint
-  serving individual segments for origin fallback (`SegmentOriginFetcher` is defined and wired in
-  the engine, but nothing in `apps/mode-b-api` implements it yet — the fallback path is
-  architecturally complete but has nothing to call).
+  a real Postgres instance (`test/sessions.test.ts`), passing. A new signing-proxy endpoint,
+  `POST /courses/:courseId/live-signatures` (`routes/live-signing.ts`), signs a session-start or
+  segment on a teacher's behalf: the institution secret key never leaves `apps/mode-b-api`,
+  matching §5.2's existing "KMS signs, the client never holds raw key material" philosophy for
+  manifest signing — `apps/mode-a-desktop` hashes a segment locally, sends only the fields (never
+  the raw media bytes, which go straight over the swarm), and gets a signature back.
+- **`apps/mode-a-desktop`'s Live panel (`LiveSessionPanel.tsx`)** — real (not synthetic) capture
+  and playback using plain Chromium web APIs Electron already ships, no new native dependency:
+  `getUserMedia`/`MediaRecorder` captures this device's camera/mic into ~6-10s segments (per the
+  spec's design decision, ticket 07), each signed via the proxy above and relayed over the swarm;
+  a receiving peer plays the stream back live via `MediaSource`. Ending a session uploads the
+  concatenated recording through the existing manifest upload route as an ordinary signed file.
+  Known limitation: the codec `MediaRecorder` picks and the one `MediaSource` expects aren't
+  negotiated over the wire (the signed segment fields are fixed-shape, no room for a `mimeType`
+  field without changing what gets signed) — both sides independently run the same fallback
+  candidate list, which agrees in the common case (two Electron/Chromium builds) but isn't a real
+  negotiation.
+- **`apps/mode-b-web`'s `CourseDetailPage`** — scheduling-only UI (a Teacher picks a start time);
+  the live session itself runs entirely in `apps/mode-a-desktop` since a browser can't run
+  Hyperswarm.
+- **Not built:** a real HTTP endpoint serving individual segments for origin fallback
+  (`SegmentOriginFetcher` is defined and wired in the engine, but nothing in `apps/mode-b-api`
+  implements it yet — the fallback path is architecturally complete but has nothing to call).
 
 ---
 

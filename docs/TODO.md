@@ -33,7 +33,7 @@
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
 │ 16  │ Business model / pricing needs a real pilot conversation                                                                                            │ Open Q5                            │
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
-│ 17  │ Live classes (WebRTC/SFU) — deliberately out of scope, don't let it leak into engine design                                                         │ Open Q7                            │
+│ 17  │ RESOLVED (architecture + build) — live lesson streams relay over the existing Hyperswarm swarm, not WebRTC/SFU (ADR-0007). Capture/relay/playback and scheduling UI now built end to end; still missing a real HTTP segment-origin-fallback endpoint. │ Open Q7, ARCHITECTURE §13.3        │
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
 │ 18  │ RESOLVED — ARCHITECTURE.md §11/§13.1 reconciled with code (plain filesystem store, real Tier 1/2/3, SHA-256, no more Hyperdrive/BLAKE2b mentions)                              │ code vs. doc                       │
 ├─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼────────────────────────────────────┤
@@ -75,6 +75,11 @@ Phase 5 — Business validation (parallel, non-blocking)
 
 Deferred / explicitly out of scope for now
 - Mobile companion app (ADR-0002 — parked, needs nodejs-mobile or Bare/Pear)
-- Live classes / WebRTC SFU (Open Q7 — different engine entirely)
 - Partial-piece (BitTorrent-style) seeding (§7 — start simple, revisit later)
 - Android/iOS background scheduling (gap 15 — moot until mobile is unparked)
+
+Phase 6 — Live lesson streaming (Mode B, ADR-0007) — mostly built
+- DONE: gap 17 — capture (getUserMedia/MediaRecorder), signing-proxy (institution key stays
+  server-side), flood-relay over the swarm, and MediaSource playback, plus mode-b-web scheduling UI
+- Build a real segment-serving HTTP endpoint in apps/mode-b-api for origin fallback
+  (SegmentOriginFetcher is wired in the engine but has nothing to call yet)
