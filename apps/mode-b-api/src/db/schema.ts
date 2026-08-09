@@ -124,3 +124,19 @@ export const enrollments = pgTable('enrollments', {
 }, (t) => ({
   userCourseUnique: uniqueIndex('enrollments_user_course_unique').on(t.userId, t.courseId)
 }))
+
+// A scheduled teacher live lesson stream (ADR-0007, .scratch/live-lesson-streaming/spec.md).
+// This table only tracks the schedule/access-control side — who may start
+// it and when it's expected. The session itself (announcement, segment
+// relay) is entirely swarm-side (@campvus/engine's live-segment-protocol),
+// not stored here at all: there's nothing to persist about an in-progress
+// or finished session beyond the recording, which becomes an ordinary
+// signed manifest through the existing ingest pipeline once the session
+// ends (see routes/sessions.ts).
+export const liveSessions = pgTable('live_sessions', {
+  id: text('id').primaryKey(),
+  courseId: text('course_id').notNull().references(() => courses.id),
+  startTime: bigint('start_time', { mode: 'number' }).notNull(),
+  createdBy: text('created_by').notNull().references(() => user.id),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull()
+})

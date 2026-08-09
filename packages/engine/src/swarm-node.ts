@@ -94,6 +94,21 @@ export interface SwarmNodeOptions {
   // its documented per-peer trace; callers that already have their own
   // logging (or want it silenced, e.g. tests) can override it.
   log?: (line: string) => void
+  // ADR-0007: only a teacher's client supplies this — the institution
+  // secret key needed to sign an outgoing session-start/segment before
+  // flooding it to connected peers. A student node has no use for it and
+  // leaves it unset; calling startLiveSession/publishSegment without one
+  // configured is a programming error (throws), the same way calling them
+  // at all only makes sense for whichever client is the segment source.
+  keypair?: Keypair
+  // Origin fallback for live segments (§5.6 applied to segments, see
+  // live-segment-origin.ts) — analogous to originFetcher/originTimeoutMs
+  // above but keyed by (sessionId, seq) instead of content hash, since a
+  // segment isn't announced in advance the way a manifest is. Optional and
+  // independent of originFetcher: a real Mode B origin would serve
+  // segments from a different route than file content.
+  segmentOriginFetcher?: SegmentOriginFetcher
+  segmentOriginTimeoutMs?: number
 }
 
 export interface SwarmNode {
@@ -116,6 +131,34 @@ export interface SwarmNode {
   // node is running, this getter reflects the current moment; a file read
   // could be a write behind it.
   getKnownManifests (): SignedManifest[]
+
+  // Live-session support (ADR-0007). See SwarmNodeOptions.keypair for who
+  // can actually call the two "publish" methods below.
+  //
+  // Signs and floods a session-start announcement to every currently
+  // connected peer on courseId's topic — the swarm-topic announcement
+  // .scratch/live-lesson-streaming/spec.md describes in place of a push
+  // notification backend. Throws if this node has no keypair configured.
+  startLiveSession (courseId: string): SignedSessionStart
+  // Signs and floods one segment of an already-started session to every
+  // currently connected peer (flood-gossip, ticket 07's fan-out design).
+  // The caller (the teacher's client) is responsible for producing bytes
+  // at the ~6-10s cadence the spec settled on and for numbering `seq`
+  // sequentially per session — gap detection for origin fallback relies on
+  // that. Throws if this node has no keypair configured.
+  publishSegment (sessionId: string, courseId: string, seq: number, bytes: Buffer): SignedLiveSegment
+  // Ticket 04 (.scratch/live-lesson-streaming/): the teacher's client is
+  // already the segment source, so it's also where the recording lives —
+  // concatenates every segment this node published for `sessionId` (in the
+  // order publishSegment was called, per its own sequential-seq contract)
+  // and runs the result through the exact same hash-sign-publish pipeline
+  // (ingestBuffer) any other course file goes through, no separate
+  // rewatch mechanism. Throws if this node has no keypair configured, or
+  // if it never published any segment for this session (nothing to
+  // publish, or this node was never the source).
+  finishLiveSession (sessionId: string, filename: string): IngestResult
+  onSessionStart (handler: (session: SignedSessionStart) => void): void
+  onSegment (handler: (segment: SignedLiveSegment, bytes: Buffer) => void): void
 }
 
 export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
@@ -125,7 +168,10 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
     manifestListFetcher, manifestSyncIntervalMs,
     originTimeoutMs = DEFAULT_ORIGIN_TIMEOUT_MS,
     seedingPolicy = alwaysAllowSeeding(),
-    log = (line: string) => console.log(line)
+    log = (line: string) => console.log(line),
+    keypair,
+    segmentOriginFetcher,
+    segmentOriginTimeoutMs = DEFAULT_ORIGIN_TIMEOUT_MS
   } = options
 
   const courseIdSet = new Set(courseIds)
@@ -176,6 +222,55 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
   // across all three discovery tiers.
   let lanDiscoveries: LanDiscovery[] = []
   let lanPeerCounter = 0
+
+  // Live-session state (ADR-0007) — deliberately not persisted anywhere
+  // the way knownManifests/registry.json is: a live session is inherently
+  // ephemeral, there's nothing to re-seed on restart.
+  const knownSessions = new Map<string, SignedSessionStart>()
+  const seenSegments = new Set<string>()
+  // Highest accepted seq per session — how a gap (a missing segment) is
+  // detected: no separate "announce" phase exists for segments (they're
+  // pushed with content included, see live-segment-protocol.ts), so a peer
+  // only learns a segment should exist once a *later* one arrives.
+  const lastSeqBySession = new Map<string, number>()
+  const segmentOriginScheduled = new Set<string>()
+  // Every currently connected peer this node could flood-relay to, keyed
+  // by the same peerId attachPeer already uses for logging. Nothing before
+  // this feature needed to reach a peer other than the one that just sent
+  // a message — flood-gossip relay is what requires tracking the full set.
+  const connectedPeers = new Map<string, Duplex>()
+  // Segments this node has itself published, buffered for finishLiveSession
+  // — only ever populated by publishSegment below (a node relaying/
+  // receiving someone else's segments doesn't record them; per ticket 04,
+  // only the source records).
+  const sessionRecordings = new Map<string, { courseId: string, chunks: Buffer[] }>()
+  const sessionStartHandlers: Array<(session: SignedSessionStart) => void> = []
+  const segmentHandlers: Array<(segment: SignedLiveSegment, bytes: Buffer) => void> = []
+
+  function relayToOthers (fromPeerId: string, msg: SessionStartMessage | SegmentMessage): void {
+    const targets = planSegmentRelay({ connectedPeerIds: [...connectedPeers.keys()], fromPeerId })
+    for (const id of targets) {
+      const conn = connectedPeers.get(id)
+      if (conn) send(conn, msg)
+    }
+  }
+
+  function considerMissingSegment (sessionId: string, seq: number): void {
+    if (!segmentOriginFetcher) return
+    scheduleSegmentOriginFallback(sessionId, seq, {
+      hasLocally: (sid, s) => seenSegments.has(`${sid}:${s}`),
+      fetchFromOrigin: segmentOriginFetcher,
+      timeoutMs: segmentOriginTimeoutMs,
+      onSuccess: (segment, bytes) => {
+        seenSegments.add(`${segment.sessionId}:${segment.seq}`)
+        for (const h of segmentHandlers) h(segment, bytes)
+        log(`[origin] fetched missing segment ${segment.sessionId}:${segment.seq}`)
+      },
+      onFailure: (sid, s, reason) => {
+        log(`[origin] failed to fetch segment ${sid}:${s} (${reason}) — still waiting on peers`)
+      }
+    }, segmentOriginScheduled)
+  }
 
   function scheduleRetryClear (hash: string): void {
     if (retryScheduled.has(hash)) return
@@ -304,6 +399,51 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
       }
       onContentObtained(result.manifest, result.bytes, `peer ${peerId}`)
     }
+
+    if (msg.type === 'session-start') {
+      const result = applySessionStartMessage({ msg, courseIds, publicKeyHex, knownSessions })
+      if (!result.accept) {
+        // 'duplicate' is the expected steady state under flood-gossip (the
+        // same announcement arrives from more than one peer) — only a
+        // genuine rejection is worth logging.
+        if (result.reason !== 'duplicate') {
+          log(`[peer ${peerId}] rejected session-start for "${msg.session.sessionId}" — ${result.reason}`)
+        }
+        return
+      }
+      log(`[peer ${peerId}] live session "${msg.session.sessionId}" started for course "${msg.session.courseId}"`)
+      relayToOthers(peerId, msg)
+      for (const h of sessionStartHandlers) h(msg.session)
+    }
+
+    if (msg.type === 'segment') {
+      const result = applySegmentMessage({ msg, courseIds, publicKeyHex, seenSegments })
+      if (!result.accept) {
+        if (result.reason !== 'duplicate') {
+          log(`[peer ${peerId}] rejected segment ${msg.segment.sessionId}:${msg.segment.seq} — ${result.reason}`)
+        }
+        return
+      }
+
+      relayToOthers(peerId, msg)
+
+      // Gap detection: if this segment's seq is ahead of what we'd
+      // consecutively seen for this session, everything in between was
+      // never delivered by the swarm — fall back to origin for exactly
+      // those, the same "time budget, then origin" shape files use.
+      const { sessionId, seq } = result.segment
+      const lastSeq = lastSeqBySession.get(sessionId)
+      if (lastSeq !== undefined && seq > lastSeq + 1) {
+        for (let missing = lastSeq + 1; missing < seq; missing++) {
+          considerMissingSegment(sessionId, missing)
+        }
+      }
+      if (lastSeq === undefined || seq > lastSeq) {
+        lastSeqBySession.set(sessionId, seq)
+      }
+
+      for (const h of segmentHandlers) h(result.segment, result.bytes)
+    }
   }
 
   // Shared by both discovery paths (ADR-0006): a Hyperswarm 'connection'
@@ -313,6 +453,7 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
   function attachPeer (conn: Duplex, peerId: string): void {
     log(`\n[peer ${peerId}] connected`)
     tracker.peerConnected()
+    connectedPeers.set(peerId, conn)
 
     let buffer = ''
     conn.on('data', (chunk: Buffer) => {
@@ -340,12 +481,22 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
     conn.on('close', () => {
       log(`[peer ${peerId}] disconnected`)
       tracker.peerDisconnected()
+      connectedPeers.delete(peerId)
     })
 
     // Announce every manifest we know of across all our enrolled courses —
     // the peer on the other end filters down to whichever of those (if any)
     // it's also enrolled in (applyManifestsMessage, above).
     send(conn, planManifestsAnnouncement(knownManifests))
+
+    // Catch up a newly connected peer on any session already in progress —
+    // without this, a peer joining after the initial flood wave (the only
+    // point relayToOthers fires from) would never learn a live session
+    // exists at all, since nothing else re-announces it once every
+    // already-connected peer has already accepted and stopped relaying it.
+    for (const session of knownSessions.values()) {
+      send(conn, { type: 'session-start', session } satisfies SessionStartMessage)
+    }
   }
 
   return {
@@ -355,6 +506,58 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
     onError: (handler) => { errorHandlers.push(handler) },
     checkOriginForManifests,
     getKnownManifests: () => Array.from(knownManifests.values()),
+
+    onSessionStart: (handler) => { sessionStartHandlers.push(handler) },
+    onSegment: (handler) => { segmentHandlers.push(handler) },
+
+    startLiveSession (courseId: string): SignedSessionStart {
+      if (!keypair) throw new Error('startLiveSession requires a keypair (this node was not configured with one)')
+      const session = signSessionStart({
+        sessionId: crypto.randomUUID(),
+        courseId,
+        startedAt: Date.now()
+      }, keypair.secretKey)
+      knownSessions.set(session.sessionId, session)
+      const msg: SessionStartMessage = { type: 'session-start', session }
+      for (const conn of connectedPeers.values()) send(conn, msg)
+      log(`live session "${session.sessionId}" started for course "${courseId}"`)
+      return session
+    },
+
+    publishSegment (sessionId: string, courseId: string, seq: number, bytes: Buffer): SignedLiveSegment {
+      if (!keypair) throw new Error('publishSegment requires a keypair (this node was not configured with one)')
+      const segment = signLiveSegment({
+        sessionId, courseId, seq,
+        hash: hashBuffer(bytes),
+        size: bytes.length,
+        timestamp: Date.now()
+      }, keypair.secretKey)
+      seenSegments.add(`${sessionId}:${seq}`)
+      const existing = lastSeqBySession.get(sessionId)
+      if (existing === undefined || seq > existing) lastSeqBySession.set(sessionId, seq)
+      const msg: SegmentMessage = { type: 'segment', segment, content: bytes.toString('base64') }
+      for (const conn of connectedPeers.values()) send(conn, msg)
+
+      const recording = sessionRecordings.get(sessionId) || { courseId, chunks: [] }
+      recording.chunks.push(bytes)
+      sessionRecordings.set(sessionId, recording)
+
+      return segment
+    },
+
+    finishLiveSession (sessionId: string, filename: string): IngestResult {
+      if (!keypair) throw new Error('finishLiveSession requires a keypair (this node was not configured with one)')
+      const recording = sessionRecordings.get(sessionId)
+      if (!recording || recording.chunks.length === 0) {
+        throw new Error(`no published segments to finish for session "${sessionId}" — this node never published to it`)
+      }
+
+      const buf = Buffer.concat(recording.chunks)
+      const result = ingestBuffer({ courseId: recording.courseId, filename, buf, keypair, paths })
+      sessionRecordings.delete(sessionId)
+      log(`live session "${sessionId}" recording published as "${filename}" (${result.deduped ? 'deduped' : 'new'})`)
+      return result
+    },
 
     async start (): Promise<void> {
       swarm = new Hyperswarm()

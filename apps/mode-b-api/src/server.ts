@@ -11,6 +11,7 @@ import { registerAuthRoutes } from './routes/auth'
 import { registerCourseRoutes } from './routes/courses'
 import { registerSchoolRoutes } from './routes/school'
 import { registerManifestRoutes } from './routes/manifests'
+import { registerSessionRoutes } from './routes/sessions'
 import { registerContentRoutes } from './routes/content'
 import { registerAdminRoutes } from './routes/admin'
 import { registerPublicKeyRoutes } from './routes/public-key'
@@ -49,6 +50,7 @@ export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
     registerCourseRoutes(app, deps.db),
     registerSchoolRoutes(app, deps.db),
     registerManifestRoutes(app, deps.db, deps.paths, deps.keypair),
+    registerSessionRoutes(app, deps.db),
     registerContentRoutes(app, deps.db, deps.paths),
     registerAdminRoutes(app, deps.db),
     registerPublicKeyRoutes(app, deps.keypair),
