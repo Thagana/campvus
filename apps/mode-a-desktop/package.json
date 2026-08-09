@@ -1,7 +1,7 @@
 {
   "name": "campvus-p2p",
   "productName": "campvus",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Campvus student P2P file sharing",
   "main": ".vite/build/main.js",
   "private": true,
