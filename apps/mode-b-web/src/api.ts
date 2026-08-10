@@ -125,6 +125,19 @@ export function scheduleSession (courseId: string, startTime: number): Promise<L
   })
 }
 
+export function rescheduleSession (courseId: string, sessionId: string, startTime: number): Promise<LiveSession> {
+  return request(`/courses/${encodeURIComponent(courseId)}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ startTime })
+  })
+}
+
+export function cancelSession (courseId: string, sessionId: string): Promise<{ id: string }> {
+  return request(`/courses/${encodeURIComponent(courseId)}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE'
+  })
+}
+
 // The signed-in user's own School (routes/school.ts) — a person belongs to
 // at most one (ADR-0005). Needed before inviteToSchool below, since
 // better-auth's invite-member endpoint requires organizationId in its

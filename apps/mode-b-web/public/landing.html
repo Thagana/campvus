@@ -129,6 +129,18 @@
 
   .muted { color: var(--ink-soft); }
 
+  /* Icons — Phosphor (phosphoricons.com), inlined as SVG (no icon font,
+     no CDN request — matches this page's existing self-hosted-fonts
+     stance). fill: currentColor lets each context set its own color via
+     the normal `color` property rather than a per-icon override. */
+  .icon {
+    display: inline-block;
+    flex-shrink: 0;
+    fill: currentColor;
+    vertical-align: middle;
+  }
+  .icon-inline { width: 1em; height: 1em; }
+
   /* Nav */
 
   .nav {
@@ -164,6 +176,9 @@
   }
 
   .nav-links a:not(.btn) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     color: var(--ink-soft);
     text-decoration: none;
   }
@@ -297,37 +312,69 @@
     font-size: 0.75rem;
     color: var(--ink-soft);
   }
-  .relay-zones li { list-style: none; }
+  .relay-zones li { list-style: none; display: flex; align-items: center; gap: 5px; }
+  .relay-zones .icon { width: 13px; height: 13px; }
 
-  /* draw-in animation, progressive enhancement only */
+  /* Growth animation, progressive enhancement only: each generation's
+     lines draw in, its dots pop, and a pulse ring "pings" outward from
+     each new dot — a visible connection forming, not just a static
+     reveal. Generation N's lines/dots are timed to start only once
+     generation N-1 has actually arrived, so the spread reads as
+     cascading rather than everything firing on a shared clock. */
   .relay-line { stroke-dasharray: 1; stroke-dashoffset: 0; }
   .relay-dot { opacity: 1; }
+  .relay-pulse { opacity: 0; fill: none; transform-box: fill-box; transform-origin: center; }
+  .relay-fringe-label { font-family: var(--font-mono); font-size: 12px; fill: var(--ink-soft); opacity: 0.6; }
 
   @media (prefers-reduced-motion: no-preference) {
-    .relay-line {
-      stroke-dashoffset: 1;
-      animation: draw 900ms ease-out forwards;
-    }
-    .relay-line.l1 { animation-delay: 200ms; }
-    .relay-line.l2 { animation-delay: 900ms; }
-    .relay-line.l3 { animation-delay: 1050ms; }
-    .relay-line.l4 { animation-delay: 1200ms; }
+    .relay-line { stroke-dashoffset: 1; animation: draw 460ms ease-out forwards; }
+    .relay-dot { opacity: 0; animation: pop 300ms ease-out forwards; }
+    .relay-pulse { animation: pulse-ring 680ms ease-out forwards; }
+    .relay-fringe-label { opacity: 0; animation: fade-in 600ms ease-out forwards; }
 
-    .relay-dot { opacity: 0; animation: pop 400ms ease-out forwards; }
-    .relay-dot.d0 { animation-delay: 0ms; }
-    .relay-dot.d1 { animation-delay: 950ms; }
-    .relay-dot.d2 { animation-delay: 1100ms; }
-    .relay-dot.d3 { animation-delay: 1250ms; }
-    .relay-dot.d4 { animation-delay: 1350ms; }
-    .relay-dot.d5 { animation-delay: 1450ms; opacity: 0.55; }
-    .relay-dot.d6 { animation-delay: 1500ms; opacity: 0.55; }
-    .relay-dot.d7 { animation-delay: 1550ms; opacity: 0.35; }
+    /* Gen 0 -> 1: origin to the first peer */
+    .relay-line.origin { animation-delay: 100ms; }
+    .relay-dot.gen1, .relay-pulse.gen1 { animation-delay: 560ms; }
+
+    /* Gen 1 -> 2: that peer relays to three coursemates */
+    .relay-line.g1a { animation-delay: 680ms; }
+    .relay-line.g1b { animation-delay: 730ms; }
+    .relay-line.g1c { animation-delay: 780ms; }
+    .relay-dot.g2a, .relay-pulse.g2a { animation-delay: 1140ms; }
+    .relay-dot.g2b, .relay-pulse.g2b { animation-delay: 1190ms; }
+    .relay-dot.g2c, .relay-pulse.g2c { animation-delay: 1240ms; }
+
+    /* Gen 2 -> 3: each of those three relays to two more */
+    .relay-line.g2a1 { animation-delay: 1320ms; }
+    .relay-line.g2a2 { animation-delay: 1370ms; }
+    .relay-line.g2b1 { animation-delay: 1370ms; }
+    .relay-line.g2b2 { animation-delay: 1420ms; }
+    .relay-line.g2c1 { animation-delay: 1420ms; }
+    .relay-line.g2c2 { animation-delay: 1470ms; }
+    .relay-dot.g3a1, .relay-pulse.g3a1 { animation-delay: 1780ms; }
+    .relay-dot.g3a2, .relay-pulse.g3a2 { animation-delay: 1830ms; }
+    .relay-dot.g3b1, .relay-pulse.g3b1 { animation-delay: 1830ms; }
+    .relay-dot.g3b2, .relay-pulse.g3b2 { animation-delay: 1880ms; }
+    .relay-dot.g3c1, .relay-pulse.g3c1 { animation-delay: 1880ms; }
+    .relay-dot.g3c2, .relay-pulse.g3c2 { animation-delay: 1930ms; }
+
+    /* The pattern keeps going past what's drawn */
+    .relay-dot.fringe { animation: fade-in 600ms ease-out forwards; }
+    .relay-dot.f1 { animation-delay: 2180ms; }
+    .relay-dot.f2 { animation-delay: 2230ms; }
+    .relay-dot.f3 { animation-delay: 2280ms; }
+    .relay-dot.f4 { animation-delay: 2330ms; }
+    .relay-fringe-label { animation-delay: 2380ms; }
   }
 
   @keyframes draw { to { stroke-dashoffset: 0; } }
   @keyframes pop { to { opacity: 1; } }
-  .relay-dot.d5, .relay-dot.d6 { opacity: 0.55; }
-  .relay-dot.d7 { opacity: 0.35; }
+  @keyframes fade-in { to { opacity: 0.6; } }
+  @keyframes pulse-ring {
+    from { opacity: 0.85; transform: scale(0.4); }
+    to { opacity: 0; transform: scale(2.6); }
+  }
+  .relay-dot.fringe { opacity: 0.6; }
 
   @media (min-width: 900px) {
     .hero .wrap { grid-template-columns: 1fr 1fr; align-items: center; }
@@ -399,6 +446,10 @@
     border-top: 2px solid var(--origin);
   }
 
+  .step-head { display: flex; align-items: center; gap: 9px; }
+
+  .step-icon { width: 20px; height: 20px; color: var(--origin); }
+
   .step-num {
     font-family: var(--font-mono);
     font-size: 0.75rem;
@@ -439,8 +490,25 @@
     margin-bottom: 14px;
   }
 
-  .mode-card h3 { font-size: 1.25rem; margin-bottom: 10px; }
+  .mode-card h3 { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; margin-bottom: 10px; }
+  .mode-icon { width: 22px; height: 22px; color: var(--origin); }
   .mode-card p { color: var(--ink-soft); font-size: 0.9375rem; }
+
+  /* Explainer video */
+
+  .video-frame {
+    margin-top: 32px;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: #0b0f1a;
+  }
+  .video-frame video { width: 100%; height: auto; display: block; }
+  .video-caption {
+    margin-top: 12px;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+  }
 
   /* Trust section */
 
@@ -461,7 +529,7 @@
     font-size: 0.9375rem;
     font-weight: 600;
   }
-  .trust-links a { text-decoration: none; }
+  .trust-links a { text-decoration: none; display: inline-flex; align-items: center; gap: 7px; }
   .trust-links a:hover { text-decoration: underline; }
 
   /* Footer */
@@ -492,7 +560,7 @@
     flex-wrap: wrap;
     font-size: 0.875rem;
   }
-  .foot-links a { color: var(--ink-soft); text-decoration: none; }
+  .foot-links a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); text-decoration: none; }
   .foot-links a:hover { color: var(--ink); }
 
   .foot-legal {
@@ -519,9 +587,9 @@
     <div class="nav-links">
       <a href="#how">How it works</a>
       <a href="#modes">Two modes</a>
-      <a href="https://github.com/Thagana/campvus">GitHub</a>
+      <a href="https://github.com/Thagana/campvus"><svg class="icon icon-inline" viewBox="0 0 256 256" aria-hidden="true"><path d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.53A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.74-3.69,43.87,43.87,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1,7.65A41.72,41.72,0,0,1,200,104Z"/></svg> GitHub</a>
       <span class="sep" aria-hidden="true"></span>
-      <a class="btn btn-secondary" href="/login">Sign in</a>
+      <a class="btn btn-secondary" href="/login">Sign in <svg class="icon icon-inline" viewBox="0 0 256 256" aria-hidden="true"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></a>
     </div>
   </nav>
 </header>
@@ -535,50 +603,77 @@
         <h1>The file your student needs is already three doors down.</h1>
         <p class="lede">Campvus lets enrolled coursemates share lecture slides, readings, and past papers directly with each other over Wi-Fi first — so the same file is only ever downloaded from the school once, not once per student.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/Thagana/campvus">Get the code</a>
-          <a class="btn btn-secondary" href="/login">Sign in</a>
+          <a class="btn btn-primary" href="https://github.com/Thagana/campvus"><svg class="icon icon-inline" viewBox="0 0 256 256" aria-hidden="true"><path d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.53A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.74-3.69,43.87,43.87,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1,7.65A41.72,41.72,0,0,1,200,104Z"/></svg> Get the code</a>
+          <a class="btn btn-secondary" href="/login">Sign in <svg class="icon icon-inline" viewBox="0 0 256 256" aria-hidden="true"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></a>
         </div>
         <p class="hero-foot"><strong>Nonprofit &amp; MIT-licensed.</strong> Self-hostable, built for schools with real bandwidth constraints — not a SaaS trial.</p>
       </div>
 
-      <div class="relay" role="img" aria-label="Diagram: a file travels once from the school's server to one nearby student, then spreads for free between that student's coursemates over the same Wi-Fi.">
+      <div class="relay" role="img" aria-label="Diagram: a file travels once from the school's server to one nearby student, who relays it to three coursemates, each of whom relays it to two more — the same pattern continuing until the whole class has it, with no further download from the school.">
         <p class="relay-caption">How one download becomes forty</p>
         <ul class="relay-zones">
-          <li>◐ same Wi-Fi</li>
-          <li>◑ same area</li>
-          <li>○ anywhere enrolled</li>
+          <li><svg class="icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M140,204a12,12,0,1,1-12-12A12,12,0,0,1,140,204ZM237.08,87A172,172,0,0,0,18.92,87,8,8,0,0,0,29.08,99.37a156,156,0,0,1,197.84,0A8,8,0,0,0,237.08,87ZM205,122.77a124,124,0,0,0-153.94,0A8,8,0,0,0,61,135.31a108,108,0,0,1,134.06,0,8,8,0,0,0,11.24-1.3A8,8,0,0,0,205,122.77Zm-32.26,35.76a76.05,76.05,0,0,0-89.42,0,8,8,0,0,0,9.42,12.94,60,60,0,0,1,70.58,0,8,8,0,1,0,9.42-12.94Z"/></svg> same Wi-Fi</li>
+          <li><svg class="icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z"/></svg> same area</li>
+          <li><svg class="icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M128,24h0A104,104,0,1,0,232,128,104.12,104.12,0,0,0,128,24Zm88,104a87.61,87.61,0,0,1-3.33,24H174.16a157.44,157.44,0,0,0,0-48h38.51A87.61,87.61,0,0,1,216,128ZM102,168H154a115.11,115.11,0,0,1-26,45A115.27,115.27,0,0,1,102,168Zm-3.9-16a140.84,140.84,0,0,1,0-48h59.88a140.84,140.84,0,0,1,0,48ZM40,128a87.61,87.61,0,0,1,3.33-24H81.84a157.44,157.44,0,0,0,0,48H43.33A87.61,87.61,0,0,1,40,128ZM154,88H102a115.11,115.11,0,0,1,26-45A115.27,115.27,0,0,1,154,88Zm52.33,0H170.71a135.28,135.28,0,0,0-22.3-45.6A88.29,88.29,0,0,1,206.37,88ZM107.59,42.4A135.28,135.28,0,0,0,85.29,88H49.63A88.29,88.29,0,0,1,107.59,42.4ZM49.63,168H85.29a135.28,135.28,0,0,0,22.3,45.6A88.29,88.29,0,0,1,49.63,168Zm98.78,45.6a135.28,135.28,0,0,0,22.3-45.6h35.66A88.29,88.29,0,0,1,148.41,213.6Z"/></svg> anywhere enrolled</li>
         </ul>
 
-        <svg viewBox="0 0 600 380" aria-hidden="true">
-          <circle cx="220" cy="240" r="70" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
-          <circle cx="220" cy="240" r="130" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
-          <circle cx="220" cy="240" r="185" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
+        <svg viewBox="0 0 600 400" aria-hidden="true">
+          <circle cx="230" cy="250" r="70" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <circle cx="230" cy="250" r="130" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <circle cx="230" cy="250" r="190" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
 
-          <!-- origin -> first peer (costs data) -->
-          <path class="relay-line l1" pathLength="1" d="M480,104 Q380,150 281,205" fill="none" stroke="var(--origin)" stroke-width="2.5"/>
-          <!-- first peer -> other local peers (free) -->
-          <path class="relay-line l2" pathLength="1" d="M281,205 L220,310" fill="none" stroke="var(--peer)" stroke-width="2"/>
-          <path class="relay-line l3" pathLength="1" d="M281,205 L150,240" fill="none" stroke="var(--peer)" stroke-width="2"/>
-          <path class="relay-line l4" pathLength="1" d="M281,205 L196,174" fill="none" stroke="var(--peer)" stroke-width="2"/>
+          <!-- Gen 0 -> 1: origin to the first peer (costs data) -->
+          <path class="relay-line origin" pathLength="1" d="M480,104 Q380,150 280,215" fill="none" stroke="var(--origin)" stroke-width="2.5"/>
+          <!-- Gen 1 -> 2: that peer relays to three coursemates (free) -->
+          <path class="relay-line g1a" pathLength="1" d="M280,215 L225,315" fill="none" stroke="var(--peer)" stroke-width="2"/>
+          <path class="relay-line g1b" pathLength="1" d="M280,215 L155,240" fill="none" stroke="var(--peer)" stroke-width="2"/>
+          <path class="relay-line g1c" pathLength="1" d="M280,215 L205,155" fill="none" stroke="var(--peer)" stroke-width="2"/>
+          <!-- Gen 2 -> 3: each of those relays to two more (still free) -->
+          <path class="relay-line g2a1" pathLength="1" d="M225,315 L170,365" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2a2" pathLength="1" d="M225,315 L285,360" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2b1" pathLength="1" d="M155,240 L85,290" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2b2" pathLength="1" d="M155,240 L90,185" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2c1" pathLength="1" d="M205,155 L150,90" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2c2" pathLength="1" d="M205,155 L260,85" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
 
-          <!-- origin node -->
-          <g class="relay-dot d0" transform="translate(466,76)">
+          <!-- origin node: the school's server -->
+          <g transform="translate(466,76)">
             <rect width="28" height="28" rx="7" fill="var(--origin)"/>
             <path d="M20.5 20.1 A 8.2 8.2 0 1 1 20.5 8.9" fill="none" stroke="#fff" stroke-width="4.1"/>
           </g>
 
-          <!-- first peer (highlighted receiver) -->
-          <circle class="relay-dot d1" cx="281" cy="205" r="9" fill="var(--origin-soft)" stroke="var(--origin)" stroke-width="2.5"/>
+          <!-- Gen 1: the first, highlighted receiver -->
+          <circle class="relay-pulse gen1" cx="280" cy="215" r="9" stroke="var(--origin)" stroke-width="2"/>
+          <circle class="relay-dot gen1" cx="280" cy="215" r="9" fill="var(--origin-soft)" stroke="var(--origin)" stroke-width="2.5"/>
 
-          <!-- free local peers -->
-          <circle class="relay-dot d2" cx="220" cy="310" r="7" fill="var(--peer)"/>
-          <circle class="relay-dot d3" cx="150" cy="240" r="7" fill="var(--peer)"/>
-          <circle class="relay-dot d4" cx="196" cy="174" r="7" fill="var(--peer)"/>
+          <!-- Gen 2: three free peer hops -->
+          <circle class="relay-pulse g2a" cx="225" cy="315" r="7" stroke="var(--peer)" stroke-width="2"/>
+          <circle class="relay-dot g2a" cx="225" cy="315" r="7" fill="var(--peer)"/>
+          <circle class="relay-pulse g2b" cx="155" cy="240" r="7" stroke="var(--peer)" stroke-width="2"/>
+          <circle class="relay-dot g2b" cx="155" cy="240" r="7" fill="var(--peer)"/>
+          <circle class="relay-pulse g2c" cx="205" cy="155" r="7" stroke="var(--peer)" stroke-width="2"/>
+          <circle class="relay-dot g2c" cx="205" cy="155" r="7" fill="var(--peer)"/>
 
-          <!-- also enrolled, not needed yet -->
-          <circle class="relay-dot d5" cx="320" cy="324" r="6" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
-          <circle class="relay-dot d6" cx="98" cy="196" r="6" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
-          <circle class="relay-dot d7" cx="362" cy="121" r="5" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <!-- Gen 3: the spread keeps going, six more free hops -->
+          <circle class="relay-pulse g3a1" cx="170" cy="365" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3a1" cx="170" cy="365" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3a2" cx="285" cy="360" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3a2" cx="285" cy="360" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3b1" cx="85" cy="290" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3b1" cx="85" cy="290" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3b2" cx="90" cy="185" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3b2" cx="90" cy="185" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3c1" cx="150" cy="90" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3c1" cx="150" cy="90" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3c2" cx="260" cy="85" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3c2" cx="260" cy="85" r="6" fill="var(--peer)"/>
+
+          <!-- the pattern keeps going past what's drawn here -->
+          <circle class="relay-dot fringe f1" cx="430" cy="330" r="5" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <circle class="relay-dot fringe f2" cx="465" cy="300" r="5" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <circle class="relay-dot fringe f3" cx="450" cy="365" r="4" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <circle class="relay-dot fringe f4" cx="490" cy="335" r="4" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <text class="relay-fringe-label" x="458" y="392" text-anchor="middle">+29 more</text>
         </svg>
 
         <ul class="relay-legend">
@@ -618,27 +713,42 @@
       <h2>Every file is addressed, signed, and verified — never just trusted.</h2>
       <div class="steps">
         <div class="step">
-          <span class="step-num">01</span>
+          <div class="step-head">
+            <svg class="icon step-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg>
+            <span class="step-num">01</span>
+          </div>
           <h3>Upload</h3>
           <p>A teacher uploads a file, or Campvus detects one your LMS already received.</p>
         </div>
         <div class="step">
-          <span class="step-num">02</span>
+          <div class="step-head">
+            <svg class="icon step-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M225.86,102.82c-3.77-3.94-7.67-8-9.14-11.57-1.36-3.27-1.44-8.69-1.52-13.94-.15-9.76-.31-20.82-8-28.51s-18.75-7.85-28.51-8c-5.25-.08-10.67-.16-13.94-1.52-3.56-1.47-7.63-5.37-11.57-9.14C146.28,23.51,138.44,16,128,16s-18.27,7.51-25.18,14.14c-3.94,3.77-8,7.67-11.57,9.14C88,40.64,82.56,40.72,77.31,40.8c-9.76.15-20.82.31-28.51,8S41,67.55,40.8,77.31c-.08,5.25-.16,10.67-1.52,13.94-1.47,3.56-5.37,7.63-9.14,11.57C23.51,109.72,16,117.56,16,128s7.51,18.27,14.14,25.18c3.77,3.94,7.67,8,9.14,11.57,1.36,3.27,1.44,8.69,1.52,13.94.15,9.76.31,20.82,8,28.51s18.75,7.85,28.51,8c5.25.08,10.67.16,13.94,1.52,3.56,1.47,7.63,5.37,11.57,9.14C109.72,232.49,117.56,240,128,240s18.27-7.51,25.18-14.14c3.94-3.77,8-7.67,11.57-9.14,3.27-1.36,8.69-1.44,13.94-1.52,9.76-.15,20.82-.31,28.51-8s7.85-18.75,8-28.51c.08-5.25.16-10.67,1.52-13.94,1.47-3.56,5.37-7.63,9.14-11.57C232.49,146.28,240,138.44,240,128S232.49,109.73,225.86,102.82Zm-11.55,39.29c-4.79,5-9.75,10.17-12.38,16.52-2.52,6.1-2.63,13.07-2.73,19.82-.1,7-.21,14.33-3.32,17.43s-10.39,3.22-17.43,3.32c-6.75.1-13.72.21-19.82,2.73-6.35,2.63-11.52,7.59-16.52,12.38S132,224,128,224s-9.15-4.92-14.11-9.69-10.17-9.75-16.52-12.38c-6.1-2.52-13.07-2.63-19.82-2.73-7-.1-14.33-.21-17.43-3.32s-3.22-10.39-3.32-17.43c-.1-6.75-.21-13.72-2.73-19.82-2.63-6.35-7.59-11.52-12.38-16.52S32,132,32,128s4.92-9.15,9.69-14.11,9.75-10.17,12.38-16.52c2.52-6.1,2.63-13.07,2.73-19.82.1-7,.21-14.33,3.32-17.43S70.51,56.9,77.55,56.8c6.75-.1,13.72-.21,19.82-2.73,6.35-2.63,11.52-7.59,16.52-12.38S124,32,128,32s9.15,4.92,14.11,9.69,10.17,9.75,16.52,12.38c6.1,2.52,13.07,2.63,19.82,2.73,7,.1,14.33.21,17.43,3.32s3.22,10.39,3.32,17.43c.1,6.75.21,13.72,2.73,19.82,2.63,6.35,7.59,11.52,12.38,16.52S224,124,224,128,219.08,137.15,214.31,142.11ZM173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34Z"/></svg>
+            <span class="step-num">02</span>
+          </div>
           <h3>Hash &amp; sign</h3>
           <p>The file is content-hashed and its manifest signed with the institution's key.</p>
         </div>
         <div class="step">
-          <span class="step-num">03</span>
+          <div class="step-head">
+            <svg class="icon step-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M128,88a40,40,0,1,0,40,40A40,40,0,0,0,128,88Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,152Zm73.71,7.14a80,80,0,0,1-14.08,22.2,8,8,0,0,1-11.92-10.67,63.95,63.95,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67,80.08,80.08,0,0,1,14.08,84.47ZM69,103.09a64,64,0,0,0,11.26,67.58,8,8,0,0,1-11.92,10.67,79.93,79.93,0,0,1,0-106.67A8,8,0,1,1,80.29,85.34,63.77,63.77,0,0,0,69,103.09ZM248,128a119.58,119.58,0,0,1-34.29,84,8,8,0,1,1-11.42-11.2,103.9,103.9,0,0,0,0-145.56A8,8,0,1,1,213.71,44,119.58,119.58,0,0,1,248,128ZM53.71,200.78A8,8,0,1,1,42.29,212a119.87,119.87,0,0,1,0-168,8,8,0,1,1,11.42,11.2,103.9,103.9,0,0,0,0,145.56Z"/></svg>
+            <span class="step-num">03</span>
+          </div>
           <h3>Announce</h3>
           <p>The signed manifest is published to that course's own private swarm topic.</p>
         </div>
         <div class="step">
-          <span class="step-num">04</span>
+          <div class="step-head">
+            <svg class="icon step-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M244.8,150.4a8,8,0,0,1-11.2-1.6A51.6,51.6,0,0,0,192,128a8,8,0,0,1-7.37-4.89,8,8,0,0,1,0-6.22A8,8,0,0,1,192,112a24,24,0,1,0-23.24-30,8,8,0,1,1-15.5-4A40,40,0,1,1,219,117.51a67.94,67.94,0,0,1,27.43,21.68A8,8,0,0,1,244.8,150.4ZM190.92,212a8,8,0,1,1-13.84,8,57,57,0,0,0-98.16,0,8,8,0,1,1-13.84-8,72.06,72.06,0,0,1,33.74-29.92,48,48,0,1,1,58.36,0A72.06,72.06,0,0,1,190.92,212ZM128,176a32,32,0,1,0-32-32A32,32,0,0,0,128,176ZM72,120a8,8,0,0,0-8-8A24,24,0,1,1,87.24,82a8,8,0,1,0,15.5-4A40,40,0,1,0,37,117.51,67.94,67.94,0,0,0,9.6,139.19a8,8,0,1,0,12.8,9.61A51.6,51.6,0,0,1,64,128,8,8,0,0,0,72,120Z"/></svg>
+            <span class="step-num">04</span>
+          </div>
           <h3>Find a peer</h3>
           <p>Enrolled devices look nearby first — same Wi-Fi, then same area, then anywhere else enrolled.</p>
         </div>
         <div class="step">
-          <span class="step-num">05</span>
+          <div class="step-head">
+            <svg class="icon step-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M248,128a87.34,87.34,0,0,1-17.6,52.81,8,8,0,1,1-12.8-9.62A71.34,71.34,0,0,0,232,128a72,72,0,0,0-144,0,8,8,0,0,1-16,0,88,88,0,0,1,3.29-23.88C74.2,104,73.1,104,72,104a48,48,0,0,0,0,96H96a8,8,0,0,1,0,16H72A64,64,0,1,1,81.29,88.68,88,88,0,0,1,248,128Zm-69.66,42.34L160,188.69V128a8,8,0,0,0-16,0v60.69l-18.34-18.35a8,8,0,0,0-11.32,11.32l32,32a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32Z"/></svg>
+            <span class="step-num">05</span>
+          </div>
           <h3>Fall back</h3>
           <p>Nobody nearby yet? It downloads from the school's own storage, hash-verified on arrival.</p>
         </div>
@@ -653,15 +763,22 @@
       <div class="mode-grid">
         <div class="mode-card">
           <span class="mode-tag">Mode A</span>
-          <h3>Beside your LMS</h3>
+          <h3><svg class="icon mode-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M237.66,66.34a8,8,0,0,0-11.32,0L192,100.69,155.31,64l34.35-34.34a8,8,0,1,0-11.32-11.32L144,52.69,117.66,26.34a8,8,0,0,0-11.32,11.32L112.69,44l-53,53a40,40,0,0,0,0,56.57l15.71,15.71L26.34,218.34a8,8,0,0,0,11.32,11.32l49.09-49.09,15.71,15.71a40,40,0,0,0,56.57,0l53-53,6.34,6.35a8,8,0,0,0,11.32-11.32L203.31,112l34.35-34.34A8,8,0,0,0,237.66,66.34ZM147.72,185a24,24,0,0,1-33.95,0L71,142.23a24,24,0,0,1,0-33.95l53-53L200.69,132Z"/></svg> Beside your LMS</h3>
           <p>No new accounts, no new upload workflow. A tray-only desktop companion watches for files your LMS already has and distributes them peer-to-peer in the background — your LMS stays the system of record.</p>
         </div>
         <div class="mode-card">
           <span class="mode-tag">Mode B</span>
-          <h3>The full app</h3>
+          <h3><svg class="icon mode-icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM80,84A12,12,0,1,1,68,72,12,12,0,0,1,80,84Zm40,0a12,12,0,1,1-12-12A12,12,0,0,1,120,84Z"/></svg> The full app</h3>
           <p>No LMS yet? Campvus runs the whole thing — course rosters, uploads, storage, and enrollment — with peer-to-peer distribution built in from day one.</p>
         </div>
       </div>
+
+      <div class="video-frame">
+        <video controls preload="none" poster="/videos/mode-a-b-explainer-poster.jpg" width="1920" height="1080">
+          <source src="/videos/mode-a-b-explainer.mp4" type="video/mp4" />
+        </video>
+      </div>
+      <p class="video-caption">35s walkthrough of how Mode A and Mode B share one engine — no sound.</p>
     </div>
   </section>
 
@@ -671,9 +788,9 @@
       <h2>No vendor lock-in. No growth targets to hit.</h2>
       <p class="trust-body">Campvus is free, open-source infrastructure for schools with limited bandwidth — not a funded startup with a subscription to justify. Fork it, self-host it, or read the architecture before you trust it with real students' data.</p>
       <div class="trust-links">
-        <a href="https://github.com/Thagana/campvus/blob/master/docs/ARCHITECTURE.md">Read the architecture →</a>
-        <a href="https://github.com/Thagana/campvus/blob/master/LICENSE">MIT License →</a>
-        <a href="https://github.com/Thagana/campvus">Source on GitHub →</a>
+        <a href="https://github.com/Thagana/campvus/blob/master/docs/ARCHITECTURE.md"><svg class="icon icon-inline" viewBox="0 0 256 256" aria-hidden="true"><path d="M232,48H160a40,40,0,0,0-32,16A40,40,0,0,0,96,48H24a8,8,0,0,0-8,8V200a8,8,0,0,0,8,8H96a24,24,0,0,1,24,24,8,8,0,0,0,16,0,24,24,0,0,1,24-24h72a8,8,0,0,0,8-8V56A8,8,0,0,0,232,48ZM96,192H32V64H96a24,24,0,0,1,24,24V200A39.81,39.81,0,0,0,96,192Zm128,0H160a39.81,39.81,0,0,0-24,8V88a24,24,0,0,1,24-24h64Z"/></svg> Read the architecture →</a>
+        <a href="https://github.com/Thagana/campvus/blob/master/LICENSE"><svg class="icon icon-inline" viewBox="0 0 256 256" aria-hidden="true"><path d="M239.43,133l-32-80h0a8,8,0,0,0-9.16-4.84L136,62V40a8,8,0,0,0-16,0V65.58L54.26,80.19A8,8,0,0,0,48.57,85h0v.06L16.57,165a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32a7.92,7.92,0,0,0-.57-3L66.92,93.77,120,82V208H104a8,8,0,0,0,0,16h48a8,8,0,0,0,0-16H136V78.42L187,67.1,160.57,133a7.92,7.92,0,0,0-.57,3c0,23.31,24.54,32,40,32s40-8.69,40-32A7.92,7.92,0,0,0,239.43,133ZM56,184c-7.53,0-22.76-3.61-23.93-14.64L56,109.54l23.93,59.82C78.76,180.39,63.53,184,56,184Zm144-32c-7.53,0-22.76-3.61-23.93-14.64L200,77.54l23.93,59.82C222.76,148.39,207.53,152,200,152Z"/></svg> MIT License →</a>
+        <a href="https://github.com/Thagana/campvus"><svg class="icon icon-inline" viewBox="0 0 256 256" aria-hidden="true"><path d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.53A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.74-3.69,43.87,43.87,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1,7.65A41.72,41.72,0,0,1,200,104Z"/></svg> Source on GitHub →</a>
       </div>
     </div>
   </section>
@@ -693,7 +810,7 @@
       <div class="foot-links">
         <a href="#how">How it works</a>
         <a href="#modes">Two modes</a>
-        <a href="https://github.com/Thagana/campvus">GitHub</a>
+        <a href="https://github.com/Thagana/campvus"><svg class="icon icon-inline" viewBox="0 0 256 256" aria-hidden="true"><path d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.53A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.74-3.69,43.87,43.87,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1,7.65A41.72,41.72,0,0,1,200,104Z"/></svg> GitHub</a>
         <a href="/login">Sign in</a>
       </div>
     </div>

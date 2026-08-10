@@ -7,7 +7,7 @@ import * as Sentry from '@sentry/electron/main';
 import { updateElectronApp } from 'update-electron-app';
 import {
   networkAwareSeedingPolicy, alwaysAllowSeeding, createSwarmNode, httpOriginFetcher, httpManifestListFetcher,
-  hasContent, hashBuffer, SwarmNode, SignedSessionStart, SignedLiveSegment
+  httpSegmentOriginFetcher, hasContent, hashBuffer, SwarmNode, SignedSessionStart, SignedLiveSegment
 } from '@campvus/engine';
 import { createAgent, AgentEngineEvents, Agent } from './agent';
 import { createWindowController } from './window-controller';
@@ -241,6 +241,11 @@ function configureEngine (config: DesktopConfig): void {
       paths,
       originFetcher: config.originUrl ? httpOriginFetcher(config.originUrl, headers) : undefined,
       manifestListFetcher: config.manifestOriginUrl ? httpManifestListFetcher(config.manifestOriginUrl, headers) : undefined,
+      // Reuses manifestOriginUrl (the same base URL /live-signatures calls)
+      // rather than a new config field — Mode B is the only real origin for
+      // live segments, unlike whole-file content which Mode A's LMS-origin
+      // flag (originUrl) also supports.
+      segmentOriginFetcher: config.manifestOriginUrl ? httpSegmentOriginFetcher(config.manifestOriginUrl, headers) : undefined,
       manifestSyncIntervalMs: config.manifestOriginUrl ? MANIFEST_SYNC_INTERVAL_MS : undefined,
       maxStoreBytes: config.maxStoreBytes,
       seedingPolicy,
@@ -456,6 +461,21 @@ ipcMain.handle('campvus:publish-live-segment', async (_event, args: PublishLiveS
     }
     const segment = await res.json() as SignedLiveSegment;
     swarmNode.relaySignedSegment(segment, bytes);
+
+    // Fire-and-forget backstop upload (docs/ARCHITECTURE.md §13.3): stores
+    // this segment on apps/mode-b-api so a peer whose swarm delivery times
+    // out has an HTTP fallback to fetch it from (segmentOriginFetcher
+    // above). Deliberately not awaited — relay-over-swarm is the primary,
+    // latency-sensitive path and must not wait on this backstop call.
+    void nodeRequest(new URL(`courses/${encodeURIComponent(args.courseId)}/live-segments`, base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${currentConfig.modeBToken}` },
+      body: JSON.stringify({ segment, content: bytes.toString('base64') }),
+    }).catch((err) => {
+      console.error('segment backstop upload failed:', err instanceof Error ? err.message : String(err));
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), { extra: { ipcHandler: 'campvus:publish-live-segment (backstop upload)' } });
+    });
+
     liveSessionSeq.set(args.sessionId, seq + 1);
     return { ok: true };
   } catch (err) {
@@ -657,11 +677,11 @@ const createMainWindow = (): { show(): void } => {
     // icon — the taskbar/titlebar icon for a running BrowserWindow (in dev
     // and in a packaged build alike) needs to be set here separately.
     // Packaged: forge.config.ts's `extraResource` copies assets/ next to
-    // resources/app.asar. Dev: __dirname is .vite/build, one level under
+    // resources/app.asar. Dev: __dirname is .vite/build, two levels under
     // the project root assets/ lives in.
     icon: app.isPackaged
       ? path.join(process.resourcesPath, 'assets/icon.png')
-      : path.join(__dirname, '../assets/icon.png'),
+      : path.join(__dirname, '../../assets/icon.png'),
     // Windows 11's own resizable, titled windows (Settings, File Explorer,
     // Notepad) sit on Mica rather than a flat fill — same window shape as
     // this one, so we match it here instead of going frameless. index.css's

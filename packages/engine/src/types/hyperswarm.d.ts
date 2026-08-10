@@ -7,6 +7,10 @@ declare module 'hyperswarm' {
   interface PeerInfo {
     publicKey: Buffer
     client: boolean
+    // Which joined-topic buffers this peer was found under (see
+    // lib/peer-info.js in the installed package — present at runtime, just
+    // absent from this hand-maintained shim before now).
+    topics: Buffer[]
   }
 
   interface Discovery {

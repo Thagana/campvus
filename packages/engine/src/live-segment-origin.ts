@@ -14,6 +14,24 @@ import { SignedLiveSegment } from './types'
 export type SegmentOriginFetcher =
   (sessionId: string, seq: number) => Promise<{ segment: SignedLiveSegment, bytes: Buffer } | null>
 
+// Mirrors origin.ts's httpOriginFetcher: a real apps/mode-b-api origin
+// serves this from routes/live-segments.ts's GET, which returns the same
+// { segment, content: base64 } shape swarm-node.ts's own SegmentMessage
+// uses over the wire — no bespoke decoding needed here. Deliberately
+// doesn't re-check hashBuffer(bytes) === segment.hash itself;
+// scheduleSegmentOriginFallback's attempt() below already does that on
+// whatever this returns, same division of labor as httpOriginFetcher vs.
+// scheduleOriginFallback.
+export function httpSegmentOriginFetcher (baseUrl: string, headers?: Record<string, string>): SegmentOriginFetcher {
+  const base = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'
+  return async (sessionId: string, seq: number) => {
+    const res = await fetch(new URL(`live-segments/${encodeURIComponent(sessionId)}/${seq}`, base), { headers })
+    if (!res.ok) return null
+    const body = await res.json() as { segment: SignedLiveSegment, content: string }
+    return { segment: body.segment, bytes: Buffer.from(body.content, 'base64') }
+  }
+}
+
 export type SegmentOriginFallbackFailureReason = 'origin-miss' | 'origin-hash-mismatch' | 'origin-error'
 
 export interface SegmentOriginFallbackDeps {

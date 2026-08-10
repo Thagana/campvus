@@ -143,3 +143,163 @@ test('scheduling for a course in a different School is denied, matching course-a
 
   assert.equal(res.statusCode, 403)
 })
+
+test('scheduling a session in the past is rejected (ticket 08)', async () => {
+  const { app, db } = await createTestApp()
+  const { ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  await createCourse(app, ownerCookie)
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/courses/COMSCI214/sessions',
+    headers: { cookie: ownerCookie },
+    payload: { startTime: Date.now() - 60_000 }
+  })
+
+  assert.equal(res.statusCode, 400)
+})
+
+test('a Teacher reschedules a session to a new future start time', async () => {
+  const { app, db } = await createTestApp()
+  const { ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  await createCourse(app, ownerCookie)
+  const created = await app.inject({
+    method: 'POST',
+    url: '/courses/COMSCI214/sessions',
+    headers: { cookie: ownerCookie },
+    payload: { startTime: Date.now() + 60_000 }
+  })
+  const sessionId = created.json().id
+
+  const newStartTime = Date.now() + 120_000
+  const res = await app.inject({
+    method: 'PATCH',
+    url: `/courses/COMSCI214/sessions/${sessionId}`,
+    headers: { cookie: ownerCookie },
+    payload: { startTime: newStartTime }
+  })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.json().startTime, newStartTime)
+})
+
+test('rescheduling to a past start time is rejected', async () => {
+  const { app, db } = await createTestApp()
+  const { ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  await createCourse(app, ownerCookie)
+  const created = await app.inject({
+    method: 'POST',
+    url: '/courses/COMSCI214/sessions',
+    headers: { cookie: ownerCookie },
+    payload: { startTime: Date.now() + 60_000 }
+  })
+
+  const res = await app.inject({
+    method: 'PATCH',
+    url: `/courses/COMSCI214/sessions/${created.json().id}`,
+    headers: { cookie: ownerCookie },
+    payload: { startTime: Date.now() - 60_000 }
+  })
+
+  assert.equal(res.statusCode, 400)
+})
+
+test('rescheduling a nonexistent session returns 404', async () => {
+  const { app, db } = await createTestApp()
+  const { ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  await createCourse(app, ownerCookie)
+
+  const res = await app.inject({
+    method: 'PATCH',
+    url: '/courses/COMSCI214/sessions/does-not-exist',
+    headers: { cookie: ownerCookie },
+    payload: { startTime: Date.now() + 60_000 }
+  })
+
+  assert.equal(res.statusCode, 404)
+})
+
+test('a Student is denied rescheduling a session', async () => {
+  const { app, db } = await createTestApp()
+  const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  await createCourse(app, ownerCookie)
+  const created = await app.inject({
+    method: 'POST',
+    url: '/courses/COMSCI214/sessions',
+    headers: { cookie: ownerCookie },
+    payload: { startTime: Date.now() + 60_000 }
+  })
+
+  const res = await app.inject({
+    method: 'PATCH',
+    url: `/courses/COMSCI214/sessions/${created.json().id}`,
+    headers: { cookie: studentCookie },
+    payload: { startTime: Date.now() + 120_000 }
+  })
+
+  assert.equal(res.statusCode, 403)
+})
+
+test('a Teacher cancels a scheduled session and it no longer appears in the list', async () => {
+  const { app, db } = await createTestApp()
+  const { ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  await createCourse(app, ownerCookie)
+  const created = await app.inject({
+    method: 'POST',
+    url: '/courses/COMSCI214/sessions',
+    headers: { cookie: ownerCookie },
+    payload: { startTime: Date.now() + 60_000 }
+  })
+  const sessionId = created.json().id
+
+  const cancelRes = await app.inject({
+    method: 'DELETE',
+    url: `/courses/COMSCI214/sessions/${sessionId}`,
+    headers: { cookie: ownerCookie }
+  })
+  assert.equal(cancelRes.statusCode, 200)
+  assert.equal(cancelRes.json().id, sessionId)
+
+  const list = await app.inject({
+    method: 'GET',
+    url: '/courses/COMSCI214/sessions',
+    headers: { cookie: ownerCookie }
+  })
+  assert.equal(list.json().length, 0)
+})
+
+test('cancelling a nonexistent session returns 404', async () => {
+  const { app, db } = await createTestApp()
+  const { ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  await createCourse(app, ownerCookie)
+
+  const res = await app.inject({
+    method: 'DELETE',
+    url: '/courses/COMSCI214/sessions/does-not-exist',
+    headers: { cookie: ownerCookie }
+  })
+
+  assert.equal(res.statusCode, 404)
+})
+
+test('a Student is denied cancelling a session', async () => {
+  const { app, db } = await createTestApp()
+  const { organizationId, ownerCookie } = await createSchoolWithOwner(app, db, { name: 'Riverside High', founderEmail: 'owner@riverside.edu' })
+  const { cookie: studentCookie } = await inviteAndAccept(app, db, { organizationId, inviterCookie: ownerCookie, email: 'student@riverside.edu', role: 'student' })
+  await createCourse(app, ownerCookie)
+  const created = await app.inject({
+    method: 'POST',
+    url: '/courses/COMSCI214/sessions',
+    headers: { cookie: ownerCookie },
+    payload: { startTime: Date.now() + 60_000 }
+  })
+
+  const res = await app.inject({
+    method: 'DELETE',
+    url: `/courses/COMSCI214/sessions/${created.json().id}`,
+    headers: { cookie: studentCookie }
+  })
+
+  assert.equal(res.statusCode, 403)
+})

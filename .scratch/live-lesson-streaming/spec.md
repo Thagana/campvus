@@ -74,6 +74,8 @@ Course can join.
 15. As a Student who isn't connected to the swarm when a session starts, I want no push
     notification to interrupt me, so that the system doesn't need an always-on notification
     backend — I find out by checking the scheduled time.
+16. As a Teacher, I want to cancel or edit the start time of a session I've already scheduled, so
+    that mistakes and rescheduling don't require deleting and recreating it by hand.
 
 ## Implementation Decisions
 
@@ -94,6 +96,10 @@ Course can join.
   revisit if real pilot data differs materially).
 - **Session scheduling:** a Teacher sets a start time on a Course; sessions are not ad-hoc. This
   is what removes the need for a push-notification backend — students know when to be connected.
+  One-off only, no recurrence. `startTime` must be in the future — `POST /courses/:courseId/sessions`
+  rejects a past timestamp, no further minimum lead time beyond that. A Teacher can cancel or edit
+  (change the start time of) a scheduled session after creating it. See
+  [Scheduling UX Detail](issues/08-scheduling-ux-detail.md).
 - **Discovery:** the session-start announcement flows over the same swarm-topic mechanism as a
   new manifest — a new message shape, not `applyManifestsMessage` itself (a live session isn't a
   static hash-addressed object), but the same flood-gossip delivery.
@@ -106,11 +112,9 @@ Course can join.
 - **Origin fallback:** an HTTP origin fetch is the correctness floor when the swarm can't deliver
   a segment within a configurable time budget — mirrors §5.6's existing peer-first,
   origin-fallback pattern for files, applied to segments instead of whole files.
-- **Explicitly not decided here, left for implementation:** exact codec/encoding, the concrete
-  wire format for the live-segment announcement message, and the scheduling UI/flow (how far in
-  advance, recurring vs. one-off, where it's surfaced in `apps/mode-b-web`/the desktop client).
-  These are engineering/UI judgment calls downstream of the architecture this spec fixes, not
-  open architecture questions.
+- **Explicitly not decided here, left for implementation:** exact codec/encoding, and the concrete
+  wire format for the live-segment announcement message. These are engineering judgment calls
+  downstream of the architecture this spec fixes, not open architecture questions.
 
 ## Testing Decisions
 
@@ -140,10 +144,13 @@ Course can join.
   SFU/WebRTC entirely for this feature.
 - Real-time two-way audio interaction (students unmuting live) — the session model is one-way
   broadcast; a video-call-style feature is a different, harder problem not covered here.
-- In-session text chat — not decided whether it belongs in this feature at all; left as an open
-  question for a follow-up, not required by this spec's destination.
-- Exact scheduling UI/flow, codec/encoding choice, and the live-segment announcement wire format
-  — implementation-level decisions downstream of this spec's architecture.
+- In-session text chat — deliberately deferred to a future follow-up effort (its own map/spec),
+  not designed or built here. This spec ships audio/video only, matching what ADR-0007's
+  one-way-broadcast analysis actually covers. See
+  [In-Session Chat Scope](issues/09-in-session-chat-scope.md).
+- Recurring sessions — scheduling stays one-off only. Exact codec/encoding choice and the
+  live-segment announcement wire format remain implementation-level decisions downstream of this
+  spec's architecture.
 - KMS-backed key custody for live-session signing — inherits the same local-file caveat already
   flagged for static-file signing (`docs/ARCHITECTURE.md` §13.1); not a new gap this feature
   introduces.

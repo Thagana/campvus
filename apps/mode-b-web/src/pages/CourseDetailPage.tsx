@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { Files, UploadSimple, UserPlus, VideoCamera, CalendarPlus } from '@phosphor-icons/react'
-import { listManifests, uploadManifest, enrollStudent, getMySchool, listSessions, scheduleSession, SignedManifest, MySchool, LiveSession } from '../api'
+import { Files, UploadSimple, UserPlus, VideoCamera, CalendarPlus, PencilSimple, Trash } from '@phosphor-icons/react'
+import { listManifests, uploadManifest, enrollStudent, getMySchool, listSessions, scheduleSession, rescheduleSession, cancelSession, SignedManifest, MySchool, LiveSession } from '../api'
 import { useAsyncForm } from '../hooks/useAsyncForm'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
@@ -28,7 +28,12 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
   const [sessionsLoadError, setSessionsLoadError] = useState<string | null>(null)
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [scheduleAt, setScheduleAt] = useState('')
+  // Non-null while the schedule modal is editing an existing session
+  // (ticket 08) rather than creating a new one — same modal, different
+  // submit target.
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const { submitting: scheduling, error: scheduleError, handleSubmit: submitSchedule } = useAsyncForm()
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
 
   // Uploading (Teacher-only per-course, manifests.ts) and enrolling
   // (Staff-only school-wide, courses.ts) are both actions a Student can
@@ -73,12 +78,50 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
   function handleSchedule (e: FormEvent): void {
     void submitSchedule(e, async () => {
       const startTime = new Date(scheduleAt).getTime()
-      await scheduleSession(courseId, startTime)
-      showSuccess('Live session scheduled.')
+      if (editingSessionId) {
+        await rescheduleSession(courseId, editingSessionId, startTime)
+        showSuccess('Live session rescheduled.')
+      } else {
+        await scheduleSession(courseId, startTime)
+        showSuccess('Live session scheduled.')
+      }
       setScheduleAt('')
+      setEditingSessionId(null)
       setScheduleOpen(false)
       refreshSessions()
     })
+  }
+
+  // datetime-local wants "YYYY-MM-DDTHH:mm" in the viewer's local time, not
+  // an ISO/UTC string — toISOString() would silently shift the displayed
+  // time by the local UTC offset.
+  function toDatetimeLocalValue (epochMs: number): string {
+    const d = new Date(epochMs)
+    const pad = (n: number): string => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  function openEditSession (session: LiveSession): void {
+    setEditingSessionId(session.id)
+    setScheduleAt(toDatetimeLocalValue(session.startTime))
+    setScheduleOpen(true)
+  }
+
+  function openScheduleNew (): void {
+    setEditingSessionId(null)
+    setScheduleAt('')
+    setScheduleOpen(true)
+  }
+
+  async function handleCancelSession (sessionId: string): Promise<void> {
+    setCancellingId(sessionId)
+    try {
+      await cancelSession(courseId, sessionId)
+      showSuccess('Live session cancelled.')
+      refreshSessions()
+    } finally {
+      setCancellingId(null)
+    }
   }
 
   return (
@@ -114,7 +157,7 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
         <div className="page-header">
           <h3>Upcoming live sessions</h3>
           {isStaff && (
-            <button type="button" className="btn btn-secondary" onClick={() => setScheduleOpen(true)}>
+            <button type="button" className="btn btn-secondary" onClick={openScheduleNew}>
               <CalendarPlus /> Schedule session
             </button>
           )}
@@ -130,11 +173,28 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
         )}
         {sessions !== 'loading' && sessions.length > 0 && (
           <table>
-            <thead><tr><th>Start time</th></tr></thead>
+            <thead><tr><th>Start time</th>{isStaff && <th>Actions</th>}</tr></thead>
             <tbody>
               {[...sessions].sort((a, b) => a.startTime - b.startTime).map((s) => (
                 <tr key={s.id}>
                   <td>{new Date(s.startTime).toLocaleString()}</td>
+                  {isStaff && (
+                    <td>
+                      <div className="row">
+                        <button type="button" className="btn btn-secondary" onClick={() => openEditSession(s)}>
+                          <PencilSimple aria-hidden /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={cancellingId === s.id}
+                          onClick={() => { void handleCancelSession(s.id) }}
+                        >
+                          <Trash aria-hidden /> {cancellingId === s.id ? 'Cancelling…' : 'Cancel'}
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -190,7 +250,11 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
         </form>
       </Modal>
 
-      <Modal open={scheduleOpen} onClose={() => setScheduleOpen(false)} title="Schedule a live session">
+      <Modal
+        open={scheduleOpen}
+        onClose={() => { setScheduleOpen(false); setEditingSessionId(null) }}
+        title={editingSessionId ? 'Reschedule live session' : 'Schedule a live session'}
+      >
         <form onSubmit={handleSchedule} className="modal-form">
           <p className="muted">Students see this on the course page; you start the session itself from the Campvus desktop app when it's time.</p>
           <label>
@@ -198,7 +262,9 @@ export default function CourseDetailPage ({ courseId }: { courseId: string }) {
             <input type="datetime-local" required autoFocus value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
           </label>
           {scheduleError && <p className="error">{scheduleError}</p>}
-          <button type="submit" className="btn btn-primary" disabled={scheduling}>{scheduling ? 'Scheduling…' : 'Schedule'}</button>
+          <button type="submit" className="btn btn-primary" disabled={scheduling}>
+            {scheduling ? 'Saving…' : editingSessionId ? 'Save' : 'Schedule'}
+          </button>
         </form>
       </Modal>
     </div>

@@ -1,7 +1,7 @@
 {
   "name": "campvus",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "dependencies": {
     "@expo/ui": "~57.0.7",
     "expo": "~57.0.8",

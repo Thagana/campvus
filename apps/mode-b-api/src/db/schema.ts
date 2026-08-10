@@ -11,7 +11,7 @@
 // better-auth's drizzle adapter reads/writes those columns as JS `Date`
 // values.
 
-import { pgTable, text, boolean, timestamp, bigint, uniqueIndex } from 'drizzle-orm/pg-core'
+import { pgTable, text, boolean, timestamp, bigint, integer, uniqueIndex } from 'drizzle-orm/pg-core'
 
 // better-auth's core schema (https://better-auth.com/docs/concepts/database).
 // Hand-written to match it exactly, rather than generated via `npx auth
@@ -140,3 +140,25 @@ export const liveSessions = pgTable('live_sessions', {
   createdBy: text('created_by').notNull().references(() => user.id),
   createdAt: bigint('created_at', { mode: 'number' }).notNull()
 })
+
+// Backstop persistence for a live segment's bytes + already-signed metadata
+// (ADR-0007, docs/ARCHITECTURE.md §13.3): the teacher's client uploads here
+// right after signing via routes/live-signing.ts, non-blocking, so
+// routes/live-segments.ts's fallback GET has something to serve when the
+// swarm can't deliver a segment to a peer in time. sessionId is the *swarm*
+// session id main.ts's campvus:start-live-session mints — a different UUID
+// from liveSessions.id above (the schedule row) — so there's deliberately
+// no FK between them.
+export const liveSegments = pgTable('live_segments', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  courseId: text('course_id').notNull().references(() => courses.id),
+  seq: integer('seq').notNull(),
+  hash: text('hash').notNull(),
+  size: bigint('size', { mode: 'number' }).notNull(),
+  timestamp: bigint('timestamp', { mode: 'number' }).notNull(),
+  signature: text('signature').notNull(),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull()
+}, (t) => ({
+  sessionSeqUnique: uniqueIndex('live_segments_session_seq_unique').on(t.sessionId, t.seq)
+}))
