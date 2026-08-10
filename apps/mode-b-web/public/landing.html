@@ -315,35 +315,66 @@
   .relay-zones li { list-style: none; display: flex; align-items: center; gap: 5px; }
   .relay-zones .icon { width: 13px; height: 13px; }
 
-  /* draw-in animation, progressive enhancement only */
+  /* Growth animation, progressive enhancement only: each generation's
+     lines draw in, its dots pop, and a pulse ring "pings" outward from
+     each new dot — a visible connection forming, not just a static
+     reveal. Generation N's lines/dots are timed to start only once
+     generation N-1 has actually arrived, so the spread reads as
+     cascading rather than everything firing on a shared clock. */
   .relay-line { stroke-dasharray: 1; stroke-dashoffset: 0; }
   .relay-dot { opacity: 1; }
+  .relay-pulse { opacity: 0; fill: none; transform-box: fill-box; transform-origin: center; }
+  .relay-fringe-label { font-family: var(--font-mono); font-size: 12px; fill: var(--ink-soft); opacity: 0.6; }
 
   @media (prefers-reduced-motion: no-preference) {
-    .relay-line {
-      stroke-dashoffset: 1;
-      animation: draw 900ms ease-out forwards;
-    }
-    .relay-line.l1 { animation-delay: 200ms; }
-    .relay-line.l2 { animation-delay: 900ms; }
-    .relay-line.l3 { animation-delay: 1050ms; }
-    .relay-line.l4 { animation-delay: 1200ms; }
+    .relay-line { stroke-dashoffset: 1; animation: draw 460ms ease-out forwards; }
+    .relay-dot { opacity: 0; animation: pop 300ms ease-out forwards; }
+    .relay-pulse { animation: pulse-ring 680ms ease-out forwards; }
+    .relay-fringe-label { opacity: 0; animation: fade-in 600ms ease-out forwards; }
 
-    .relay-dot { opacity: 0; animation: pop 400ms ease-out forwards; }
-    .relay-dot.d0 { animation-delay: 0ms; }
-    .relay-dot.d1 { animation-delay: 950ms; }
-    .relay-dot.d2 { animation-delay: 1100ms; }
-    .relay-dot.d3 { animation-delay: 1250ms; }
-    .relay-dot.d4 { animation-delay: 1350ms; }
-    .relay-dot.d5 { animation-delay: 1450ms; opacity: 0.55; }
-    .relay-dot.d6 { animation-delay: 1500ms; opacity: 0.55; }
-    .relay-dot.d7 { animation-delay: 1550ms; opacity: 0.35; }
+    /* Gen 0 -> 1: origin to the first peer */
+    .relay-line.origin { animation-delay: 100ms; }
+    .relay-dot.gen1, .relay-pulse.gen1 { animation-delay: 560ms; }
+
+    /* Gen 1 -> 2: that peer relays to three coursemates */
+    .relay-line.g1a { animation-delay: 680ms; }
+    .relay-line.g1b { animation-delay: 730ms; }
+    .relay-line.g1c { animation-delay: 780ms; }
+    .relay-dot.g2a, .relay-pulse.g2a { animation-delay: 1140ms; }
+    .relay-dot.g2b, .relay-pulse.g2b { animation-delay: 1190ms; }
+    .relay-dot.g2c, .relay-pulse.g2c { animation-delay: 1240ms; }
+
+    /* Gen 2 -> 3: each of those three relays to two more */
+    .relay-line.g2a1 { animation-delay: 1320ms; }
+    .relay-line.g2a2 { animation-delay: 1370ms; }
+    .relay-line.g2b1 { animation-delay: 1370ms; }
+    .relay-line.g2b2 { animation-delay: 1420ms; }
+    .relay-line.g2c1 { animation-delay: 1420ms; }
+    .relay-line.g2c2 { animation-delay: 1470ms; }
+    .relay-dot.g3a1, .relay-pulse.g3a1 { animation-delay: 1780ms; }
+    .relay-dot.g3a2, .relay-pulse.g3a2 { animation-delay: 1830ms; }
+    .relay-dot.g3b1, .relay-pulse.g3b1 { animation-delay: 1830ms; }
+    .relay-dot.g3b2, .relay-pulse.g3b2 { animation-delay: 1880ms; }
+    .relay-dot.g3c1, .relay-pulse.g3c1 { animation-delay: 1880ms; }
+    .relay-dot.g3c2, .relay-pulse.g3c2 { animation-delay: 1930ms; }
+
+    /* The pattern keeps going past what's drawn */
+    .relay-dot.fringe { animation: fade-in 600ms ease-out forwards; }
+    .relay-dot.f1 { animation-delay: 2180ms; }
+    .relay-dot.f2 { animation-delay: 2230ms; }
+    .relay-dot.f3 { animation-delay: 2280ms; }
+    .relay-dot.f4 { animation-delay: 2330ms; }
+    .relay-fringe-label { animation-delay: 2380ms; }
   }
 
   @keyframes draw { to { stroke-dashoffset: 0; } }
   @keyframes pop { to { opacity: 1; } }
-  .relay-dot.d5, .relay-dot.d6 { opacity: 0.55; }
-  .relay-dot.d7 { opacity: 0.35; }
+  @keyframes fade-in { to { opacity: 0.6; } }
+  @keyframes pulse-ring {
+    from { opacity: 0.85; transform: scale(0.4); }
+    to { opacity: 0; transform: scale(2.6); }
+  }
+  .relay-dot.fringe { opacity: 0.6; }
 
   @media (min-width: 900px) {
     .hero .wrap { grid-template-columns: 1fr 1fr; align-items: center; }
@@ -463,6 +494,22 @@
   .mode-icon { width: 22px; height: 22px; color: var(--origin); }
   .mode-card p { color: var(--ink-soft); font-size: 0.9375rem; }
 
+  /* Explainer video */
+
+  .video-frame {
+    margin-top: 32px;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: #0b0f1a;
+  }
+  .video-frame video { width: 100%; height: auto; display: block; }
+  .video-caption {
+    margin-top: 12px;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+  }
+
   /* Trust section */
 
   .trust-body {
@@ -562,7 +609,7 @@
         <p class="hero-foot"><strong>Nonprofit &amp; MIT-licensed.</strong> Self-hostable, built for schools with real bandwidth constraints — not a SaaS trial.</p>
       </div>
 
-      <div class="relay" role="img" aria-label="Diagram: a file travels once from the school's server to one nearby student, then spreads for free between that student's coursemates over the same Wi-Fi.">
+      <div class="relay" role="img" aria-label="Diagram: a file travels once from the school's server to one nearby student, who relays it to three coursemates, each of whom relays it to two more — the same pattern continuing until the whole class has it, with no further download from the school.">
         <p class="relay-caption">How one download becomes forty</p>
         <ul class="relay-zones">
           <li><svg class="icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M140,204a12,12,0,1,1-12-12A12,12,0,0,1,140,204ZM237.08,87A172,172,0,0,0,18.92,87,8,8,0,0,0,29.08,99.37a156,156,0,0,1,197.84,0A8,8,0,0,0,237.08,87ZM205,122.77a124,124,0,0,0-153.94,0A8,8,0,0,0,61,135.31a108,108,0,0,1,134.06,0,8,8,0,0,0,11.24-1.3A8,8,0,0,0,205,122.77Zm-32.26,35.76a76.05,76.05,0,0,0-89.42,0,8,8,0,0,0,9.42,12.94,60,60,0,0,1,70.58,0,8,8,0,1,0,9.42-12.94Z"/></svg> same Wi-Fi</li>
@@ -570,36 +617,63 @@
           <li><svg class="icon" viewBox="0 0 256 256" aria-hidden="true"><path d="M128,24h0A104,104,0,1,0,232,128,104.12,104.12,0,0,0,128,24Zm88,104a87.61,87.61,0,0,1-3.33,24H174.16a157.44,157.44,0,0,0,0-48h38.51A87.61,87.61,0,0,1,216,128ZM102,168H154a115.11,115.11,0,0,1-26,45A115.27,115.27,0,0,1,102,168Zm-3.9-16a140.84,140.84,0,0,1,0-48h59.88a140.84,140.84,0,0,1,0,48ZM40,128a87.61,87.61,0,0,1,3.33-24H81.84a157.44,157.44,0,0,0,0,48H43.33A87.61,87.61,0,0,1,40,128ZM154,88H102a115.11,115.11,0,0,1,26-45A115.27,115.27,0,0,1,154,88Zm52.33,0H170.71a135.28,135.28,0,0,0-22.3-45.6A88.29,88.29,0,0,1,206.37,88ZM107.59,42.4A135.28,135.28,0,0,0,85.29,88H49.63A88.29,88.29,0,0,1,107.59,42.4ZM49.63,168H85.29a135.28,135.28,0,0,0,22.3,45.6A88.29,88.29,0,0,1,49.63,168Zm98.78,45.6a135.28,135.28,0,0,0,22.3-45.6h35.66A88.29,88.29,0,0,1,148.41,213.6Z"/></svg> anywhere enrolled</li>
         </ul>
 
-        <svg viewBox="0 0 600 380" aria-hidden="true">
-          <circle cx="220" cy="240" r="70" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
-          <circle cx="220" cy="240" r="130" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
-          <circle cx="220" cy="240" r="185" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
+        <svg viewBox="0 0 600 400" aria-hidden="true">
+          <circle cx="230" cy="250" r="70" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <circle cx="230" cy="250" r="130" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <circle cx="230" cy="250" r="190" fill="none" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 4"/>
 
-          <!-- origin -> first peer (costs data) -->
-          <path class="relay-line l1" pathLength="1" d="M480,104 Q380,150 281,205" fill="none" stroke="var(--origin)" stroke-width="2.5"/>
-          <!-- first peer -> other local peers (free) -->
-          <path class="relay-line l2" pathLength="1" d="M281,205 L220,310" fill="none" stroke="var(--peer)" stroke-width="2"/>
-          <path class="relay-line l3" pathLength="1" d="M281,205 L150,240" fill="none" stroke="var(--peer)" stroke-width="2"/>
-          <path class="relay-line l4" pathLength="1" d="M281,205 L196,174" fill="none" stroke="var(--peer)" stroke-width="2"/>
+          <!-- Gen 0 -> 1: origin to the first peer (costs data) -->
+          <path class="relay-line origin" pathLength="1" d="M480,104 Q380,150 280,215" fill="none" stroke="var(--origin)" stroke-width="2.5"/>
+          <!-- Gen 1 -> 2: that peer relays to three coursemates (free) -->
+          <path class="relay-line g1a" pathLength="1" d="M280,215 L225,315" fill="none" stroke="var(--peer)" stroke-width="2"/>
+          <path class="relay-line g1b" pathLength="1" d="M280,215 L155,240" fill="none" stroke="var(--peer)" stroke-width="2"/>
+          <path class="relay-line g1c" pathLength="1" d="M280,215 L205,155" fill="none" stroke="var(--peer)" stroke-width="2"/>
+          <!-- Gen 2 -> 3: each of those relays to two more (still free) -->
+          <path class="relay-line g2a1" pathLength="1" d="M225,315 L170,365" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2a2" pathLength="1" d="M225,315 L285,360" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2b1" pathLength="1" d="M155,240 L85,290" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2b2" pathLength="1" d="M155,240 L90,185" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2c1" pathLength="1" d="M205,155 L150,90" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
+          <path class="relay-line g2c2" pathLength="1" d="M205,155 L260,85" fill="none" stroke="var(--peer)" stroke-width="1.5"/>
 
-          <!-- origin node -->
-          <g class="relay-dot d0" transform="translate(466,76)">
+          <!-- origin node: the school's server -->
+          <g transform="translate(466,76)">
             <rect width="28" height="28" rx="7" fill="var(--origin)"/>
             <path d="M20.5 20.1 A 8.2 8.2 0 1 1 20.5 8.9" fill="none" stroke="#fff" stroke-width="4.1"/>
           </g>
 
-          <!-- first peer (highlighted receiver) -->
-          <circle class="relay-dot d1" cx="281" cy="205" r="9" fill="var(--origin-soft)" stroke="var(--origin)" stroke-width="2.5"/>
+          <!-- Gen 1: the first, highlighted receiver -->
+          <circle class="relay-pulse gen1" cx="280" cy="215" r="9" stroke="var(--origin)" stroke-width="2"/>
+          <circle class="relay-dot gen1" cx="280" cy="215" r="9" fill="var(--origin-soft)" stroke="var(--origin)" stroke-width="2.5"/>
 
-          <!-- free local peers -->
-          <circle class="relay-dot d2" cx="220" cy="310" r="7" fill="var(--peer)"/>
-          <circle class="relay-dot d3" cx="150" cy="240" r="7" fill="var(--peer)"/>
-          <circle class="relay-dot d4" cx="196" cy="174" r="7" fill="var(--peer)"/>
+          <!-- Gen 2: three free peer hops -->
+          <circle class="relay-pulse g2a" cx="225" cy="315" r="7" stroke="var(--peer)" stroke-width="2"/>
+          <circle class="relay-dot g2a" cx="225" cy="315" r="7" fill="var(--peer)"/>
+          <circle class="relay-pulse g2b" cx="155" cy="240" r="7" stroke="var(--peer)" stroke-width="2"/>
+          <circle class="relay-dot g2b" cx="155" cy="240" r="7" fill="var(--peer)"/>
+          <circle class="relay-pulse g2c" cx="205" cy="155" r="7" stroke="var(--peer)" stroke-width="2"/>
+          <circle class="relay-dot g2c" cx="205" cy="155" r="7" fill="var(--peer)"/>
 
-          <!-- also enrolled, not needed yet -->
-          <circle class="relay-dot d5" cx="320" cy="324" r="6" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
-          <circle class="relay-dot d6" cx="98" cy="196" r="6" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
-          <circle class="relay-dot d7" cx="362" cy="121" r="5" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <!-- Gen 3: the spread keeps going, six more free hops -->
+          <circle class="relay-pulse g3a1" cx="170" cy="365" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3a1" cx="170" cy="365" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3a2" cx="285" cy="360" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3a2" cx="285" cy="360" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3b1" cx="85" cy="290" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3b1" cx="85" cy="290" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3b2" cx="90" cy="185" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3b2" cx="90" cy="185" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3c1" cx="150" cy="90" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3c1" cx="150" cy="90" r="6" fill="var(--peer)"/>
+          <circle class="relay-pulse g3c2" cx="260" cy="85" r="6" stroke="var(--peer)" stroke-width="1.5"/>
+          <circle class="relay-dot g3c2" cx="260" cy="85" r="6" fill="var(--peer)"/>
+
+          <!-- the pattern keeps going past what's drawn here -->
+          <circle class="relay-dot fringe f1" cx="430" cy="330" r="5" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <circle class="relay-dot fringe f2" cx="465" cy="300" r="5" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <circle class="relay-dot fringe f3" cx="450" cy="365" r="4" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <circle class="relay-dot fringe f4" cx="490" cy="335" r="4" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+          <text class="relay-fringe-label" x="458" y="392" text-anchor="middle">+29 more</text>
         </svg>
 
         <ul class="relay-legend">
@@ -698,6 +772,13 @@
           <p>No LMS yet? Campvus runs the whole thing — course rosters, uploads, storage, and enrollment — with peer-to-peer distribution built in from day one.</p>
         </div>
       </div>
+
+      <div class="video-frame">
+        <video controls preload="none" poster="/videos/mode-a-b-explainer-poster.jpg" width="1920" height="1080">
+          <source src="/videos/mode-a-b-explainer.mp4" type="video/mp4" />
+        </video>
+      </div>
+      <p class="video-caption">35s walkthrough of how Mode A and Mode B share one engine — no sound.</p>
     </div>
   </section>
 

@@ -13,6 +13,7 @@ import { registerSchoolRoutes } from './routes/school'
 import { registerManifestRoutes } from './routes/manifests'
 import { registerSessionRoutes } from './routes/sessions'
 import { registerLiveSigningRoutes } from './routes/live-signing'
+import { registerLiveSegmentRoutes } from './routes/live-segments'
 import { registerContentRoutes } from './routes/content'
 import { registerAdminRoutes } from './routes/admin'
 import { registerPublicKeyRoutes } from './routes/public-key'
@@ -64,6 +65,7 @@ export async function buildServer (deps: ServerDeps): Promise<FastifyInstance> {
     registerManifestRoutes(app, deps.db, deps.paths, deps.keypair),
     registerSessionRoutes(app, deps.db),
     registerLiveSigningRoutes(app, deps.db, deps.keypair),
+    registerLiveSegmentRoutes(app, deps.db, deps.paths, deps.keypair),
     registerContentRoutes(app, deps.db, deps.paths),
     registerAdminRoutes(app, deps.db),
     registerPublicKeyRoutes(app, deps.keypair),

@@ -1,6 +1,6 @@
 {
   "name": "@campvus/mode-b-api",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Mode B: the full-app backend — direct-upload API, auth/enrollment, and origin storage. We deploy this infra ourselves instead of watching an LMS.",
   "license": "MIT",

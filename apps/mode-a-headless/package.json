@@ -1,6 +1,6 @@
 {
   "name": "@campvus/mode-a-headless",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Mode A: headless P2P accelerator that sits beside an existing LMS. CLI-only, no UI of our own.",
   "license": "MIT",

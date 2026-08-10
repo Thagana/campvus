@@ -50,3 +50,20 @@ This resolves the "scheduling UX detail" fog item from
 three decisions above are implementation gaps (past-timestamp validation, cancel/edit) that
 `spec.md` should now call for explicitly rather than leave as an open implementation-level
 question.
+
+## Implemented
+
+Both gaps closed:
+
+- `POST /courses/:courseId/sessions` and the new `PATCH .../sessions/:sessionId` now reject
+  `startTime <= Date.now()` with a 400.
+- `PATCH .../sessions/:sessionId` (reschedule) and `DELETE .../sessions/:sessionId` (cancel) added
+  to `apps/mode-b-api/src/routes/sessions.ts`, same `requireCourseRole(..., ['teacher'])` gate as
+  the existing routes, 404 if the session doesn't belong to that course.
+- `apps/mode-b-web/src/api.ts` gained `rescheduleSession`/`cancelSession`; `CourseDetailPage`'s
+  session table now has per-row Edit/Cancel actions (Edit reuses the schedule modal, prefilled).
+- Tests added to `apps/mode-b-api/test/sessions.test.ts` covering past-timestamp rejection on both
+  create and reschedule, reschedule/cancel success, 404s, and Student-denied cases — **not run**:
+  this environment has no `TEST_DATABASE_URL`/disposable Postgres and Docker isn't running, so
+  these are unverified against a real database. `tsc --noEmit` and `vite build` are clean on both
+  `apps/mode-b-api` and `apps/mode-b-web`.

@@ -55,6 +55,22 @@ import { Keypair, SignedLiveSegment, SignedManifest, SignedSessionStart } from '
 
 type WireMessage = ManifestsMessage | WantMessage | DataMessage | SessionStartMessage | SegmentMessage
 
+// Which discovery tier (ADR-0006) produced a given peer connection —
+// surfaced via onPeerConnected below so callers (and the discovery-timing
+// manual harness) can tell "found instantly via LAN mDNS" apart from "took
+// 8s over the wide DHT" instead of guessing from log lines.
+export type DiscoveryTier = 'lan' | 'dht-region' | 'dht-wide'
+
+export interface PeerConnectedInfo {
+  peerId: string
+  tier: DiscoveryTier
+  // Milliseconds between this node's start() call returning-to-caller point
+  // (actually: the instant start() began) and this connection being
+  // attached — not a peer-to-peer RTT, a "how long did discovery take"
+  // number from this node's own perspective.
+  elapsedMs: number
+}
+
 const DEFAULT_ORIGIN_TIMEOUT_MS = 15000
 // How long to wait for the peer we already asked before allowing a
 // re-request to a different peer. Deliberately decoupled from the origin
@@ -115,6 +131,12 @@ export interface SwarmNode {
   start (): Promise<void>
   stop (): Promise<void>
   onPeerCountChange (handler: (count: number) => void): void
+  // Fires once per connection, tagged with which discovery tier (ADR-0006)
+  // produced it and how long since start() this took — see
+  // PeerConnectedInfo. Intended for timing/diagnostics (e.g. the
+  // discovery-timing manual harness), not for connection-lifecycle logic;
+  // onPeerCountChange remains the right hook for "do we have any peers".
+  onPeerConnected (handler: (info: PeerConnectedInfo) => void): void
   onSyncStart (handler: () => void): void
   onSyncEnd (handler: () => void): void
   onError (handler: (err: Error) => void): void
@@ -241,6 +263,17 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
   // across all three discovery tiers.
   let lanDiscoveries: LanDiscovery[] = []
   let lanPeerCounter = 0
+
+  // set at the very top of start() — the origin point for every
+  // PeerConnectedInfo.elapsedMs measurement below.
+  let nodeStartedAt = 0
+  // Populated per course as start() joins topics, so the Hyperswarm
+  // 'connection' handler (registered once, before the per-course loop) can
+  // classify an incoming connection's info.topics back to dht-region vs
+  // dht-wide — Hyperswarm's connection event doesn't say which joined topic
+  // produced it, only which topic buffers the peer was found under.
+  const topicTierByHex = new Map<string, DiscoveryTier>()
+  const peerConnectedHandlers: Array<(info: PeerConnectedInfo) => void> = []
 
   // Live-session state (ADR-0007) — deliberately not persisted anywhere
   // the way knownManifests/registry.json is: a live session is inherently
@@ -509,8 +542,10 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
   // event and a lan-discovery.ts TCP socket both end up here, since the
   // wire protocol (handleMessage/send) only needs a Duplex and has no
   // opinion on how the connection was established.
-  function attachPeer (conn: Duplex, peerId: string): void {
-    log(`\n[peer ${peerId}] connected`)
+  function attachPeer (conn: Duplex, peerId: string, tier: DiscoveryTier): void {
+    const elapsedMs = Date.now() - nodeStartedAt
+    log(`\n[peer ${peerId}] connected via ${tier} (+${elapsedMs}ms since start)`)
+    for (const h of peerConnectedHandlers) h({ peerId, tier, elapsedMs })
     tracker.peerConnected()
     connectedPeers.set(peerId, conn)
 
@@ -560,6 +595,7 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
 
   return {
     onPeerCountChange: tracker.onPeerCountChange,
+    onPeerConnected: (handler) => { peerConnectedHandlers.push(handler) },
     onSyncStart: tracker.onSyncStart,
     onSyncEnd: tracker.onSyncEnd,
     onError: (handler) => { errorHandlers.push(handler) },
@@ -615,6 +651,7 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
     takeSessionRecording,
 
     async start (): Promise<void> {
+      nodeStartedAt = Date.now()
       swarm = new Hyperswarm()
 
       // Anything missing at startup should start its origin-fallback clock
@@ -633,7 +670,12 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
       }
 
       swarm.on('connection', (conn: Duplex, info) => {
-        attachPeer(conn, b4a.toString(info.publicKey, 'hex').slice(0, 8))
+        // info.topics is the set of joined-topic buffers this peer was
+        // found under — dht-region wins the classification if present
+        // since that's the narrower, more specific tier.
+        const tiers = info.topics.map((t) => topicTierByHex.get(t.toString('hex')))
+        const tier: DiscoveryTier = tiers.includes('dht-region') ? 'dht-region' : 'dht-wide'
+        attachPeer(conn, b4a.toString(info.publicKey, 'hex').slice(0, 8), tier)
       })
 
       // One DHT topic join (Tier 3) + one LanDiscovery (Tier 1) + one
@@ -643,10 +685,11 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
       // every course's peers without per-topic handling.
       for (const id of courseIds) {
         const topic = topicForCourse(id)
+        topicTierByHex.set(topic.toString('hex'), 'dht-wide')
 
         const lanDiscovery = createLanDiscovery({
           topic,
-          onConnection: (socket) => attachPeer(socket, `lan-${++lanPeerCounter}`),
+          onConnection: (socket) => attachPeer(socket, `lan-${++lanPeerCounter}`, 'lan'),
           onError: (err) => log(`[lan-discovery] ${err.message}`)
         })
         await lanDiscovery.start()
@@ -663,7 +706,9 @@ export function createSwarmNode (options: SwarmNodeOptions): SwarmNode {
         log(`\nJoined swarm topic for course "${id}". Waiting for peers...`)
 
         if (region) {
-          const regionDiscovery = swarm.join(topicForCourseAndRegion(id, region), { server: true, client: true })
+          const regionTopic = topicForCourseAndRegion(id, region)
+          topicTierByHex.set(regionTopic.toString('hex'), 'dht-region')
+          const regionDiscovery = swarm.join(regionTopic, { server: true, client: true })
           try {
             await regionDiscovery.flushed()
           } catch (err) {

@@ -74,11 +74,12 @@ following this repo's `spec.md` + `issues/` convention.
   resolved via discussion — code spike deferred to implementation): flood/gossip fan-out (same
   pattern as manifest gossip), ~6-10s segments. Flood-gossip solves the relay-dropout robustness
   problem structurally — no single-parent dependency, no explicit tree-rebuild logic needed.
-- [Scheduling UX Detail](issues/08-scheduling-ux-detail.md) (grilling, resolved): one-off only
-  (no recurring), `startTime` must reject a past timestamp (not yet built — real gap), and a
-  Teacher can cancel/edit a scheduled session (not yet built — real gap). Surfaced on
-  `CourseDetailPage` as-built, no change there. `spec.md` updated to call for the two gaps
-  explicitly rather than leaving scheduling UX as an open implementation question.
+- [Scheduling UX Detail](issues/08-scheduling-ux-detail.md) (grilling, resolved, implemented):
+  one-off only (no recurring), `startTime` must reject a past timestamp, and a Teacher can
+  cancel/edit a scheduled session. Both gaps are now built: `PATCH`/`DELETE
+  /courses/:courseId/sessions/:sessionId` in `apps/mode-b-api`, Edit/Cancel actions on
+  `CourseDetailPage`. Tests added but unrun (no disposable Postgres in this environment) —
+  `tsc`/`vite build` clean.
 - [In-Session Chat Scope](issues/09-in-session-chat-scope.md) (grilling, resolved): deferred to a
   future follow-up effort — this spec ships audio/video only, matching ADR-0007's one-way-broadcast
   analysis. `spec.md`'s Out of Scope section updated from "not decided" to a settled deferral.

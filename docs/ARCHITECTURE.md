@@ -328,12 +328,21 @@ Full path built end to end — scheduling, capture, relay, and playback — and 
   field without changing what gets signed) — both sides independently run the same fallback
   candidate list, which agrees in the common case (two Electron/Chromium builds) but isn't a real
   negotiation.
-- **`apps/mode-b-web`'s `CourseDetailPage`** — scheduling-only UI (a Teacher picks a start time);
+- **`apps/mode-b-web`'s `CourseDetailPage`** — scheduling-only UI (a Teacher picks a start time,
+  and can cancel or reschedule afterward via `PATCH`/`DELETE /courses/:courseId/sessions/:sessionId`);
   the live session itself runs entirely in `apps/mode-a-desktop` since a browser can't run
   Hyperswarm.
-- **Not built:** a real HTTP endpoint serving individual segments for origin fallback
-  (`SegmentOriginFetcher` is defined and wired in the engine, but nothing in `apps/mode-b-api`
-  implements it yet — the fallback path is architecturally complete but has nothing to call).
+- **Segment origin fallback** — the first bullet's `live-segment-origin.ts` defines and wires an
+  origin-fallback path with nothing to call it; this closes that gap. `apps/mode-b-api`'s
+  `live_segments` table + `routes/live-segments.ts` gives the fallback path something to call: the
+  teacher's client
+  uploads each segment's bytes + its already-signed metadata (`POST
+  /courses/:courseId/live-segments`) right after signing, fire-and-forget and non-blocking so this
+  backstop can never slow down the primary swarm-relay path. `GET /live-segments/:sessionId/:seq`
+  is what `packages/engine`'s new `httpSegmentOriginFetcher` (wired into `main.ts`'s
+  `createSwarmNode()` call as `segmentOriginFetcher`) calls when a peer's swarm delivery times out.
+  `routes/live-signing.ts` itself is unchanged — still a pure, stateless signing call; raw bytes
+  never touch it.
 
 ---
 

@@ -15,6 +15,13 @@
       "when": 1786285707875,
       "tag": "0001_tough_agent_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786373535294,
+      "tag": "0002_bored_tarot",
+      "breakpoints": true
     }
   ]
 }
